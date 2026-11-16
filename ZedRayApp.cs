@@ -169,6 +169,11 @@ namespace ZedRay
             SetupTrayIcon();
             SetupTimers();
             RefreshAllUI();
+
+            if (servers.Count == 0 && !string.IsNullOrEmpty(settings.SubUrl))
+            {
+                Dispatcher.BeginInvoke(new Action(async () => await SyncSubscriptionAsync()));
+            }
         }
 
         private void InitializeWindow()
@@ -1188,20 +1193,8 @@ namespace ZedRay
             sp.Children.Add(linkBtns);
 
             // Section 2: Subscription URL
-            sp.Children.Add(new TextBlock { Text = "2. Yoki Obuna (Subscription URL) qo'shish:", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#A855F7"), Margin = new Thickness(0, 0, 0, 4) });
-            txtSubName = new TextBox
-            {
-                Text = settings.SubName,
-                Background = BrushFromHex("#090C15"),
-                Foreground = Brushes.White,
-                CaretBrush = Brushes.White,
-                BorderBrush = BrushFromHex("#242D4A"),
-                FontSize = 12,
-                Padding = new Thickness(8, 5, 8, 5),
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            sp.Children.Add(txtSubName);
-
+            sp.Children.Add(new TextBlock { Text = "2. Yoki Obuna havolasi (Subscription URL):", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#A855F7"), Margin = new Thickness(0, 0, 0, 4) });
+            
             txtSubUrl = new TextBox
             {
                 Text = settings.SubUrl,
@@ -1211,19 +1204,51 @@ namespace ZedRay
                 BorderBrush = BrushFromHex("#242D4A"),
                 FontSize = 11.5,
                 Padding = new Thickness(8, 5, 8, 5),
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 6)
             };
             sp.Children.Add(txtSubUrl);
 
+            txtSubName = new TextBox
+            {
+                Text = string.IsNullOrEmpty(settings.SubName) ? "MultiCo VPN" : settings.SubName,
+                Background = BrushFromHex("#090C15"),
+                Foreground = Brushes.White,
+                CaretBrush = Brushes.White,
+                BorderBrush = BrushFromHex("#242D4A"),
+                FontSize = 11,
+                Padding = new Thickness(8, 5, 8, 5),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            sp.Children.Add(txtSubName);
+
             StackPanel subBtns = new StackPanel { Orientation = Orientation.Horizontal };
             Button pasteSubBtn = CreateActionPillButton("📋 URL Paste", "#182238", "#93C5FD");
-            pasteSubBtn.Click += (s, e) => { if (Clipboard.ContainsText()) txtSubUrl.Text = Clipboard.GetText().Trim(); };
+            pasteSubBtn.Click += (s, e) =>
+            {
+                if (Clipboard.ContainsText())
+                {
+                    string clip = Clipboard.GetText().Trim();
+                    txtSubUrl.Text = clip;
+                }
+            };
             Button saveSubBtn = CreateActionPillButton("🔄 Obunani Yuklash", "#A855F7", "#FFFFFF");
             saveSubBtn.Margin = new Thickness(8, 0, 0, 0);
             saveSubBtn.Click += async (s, e) =>
             {
-                settings.SubName = txtSubName.Text.Trim();
-                settings.SubUrl = txtSubUrl.Text.Trim();
+                string u1 = txtSubUrl.Text.Trim();
+                string n1 = txtSubName.Text.Trim();
+                if (string.IsNullOrEmpty(u1) && (n1.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || n1.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+                {
+                    u1 = n1;
+                    n1 = "MultiCo VPN";
+                }
+                if (string.IsNullOrEmpty(u1))
+                {
+                    MessageBox.Show("Iltimos, obuna havolasini (https://...) kiriting.", "ZedRay", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                settings.SubUrl = u1;
+                settings.SubName = string.IsNullOrEmpty(n1) ? "MultiCo VPN" : n1;
                 SaveData();
                 overlay.Visibility = Visibility.Collapsed;
                 await SyncSubscriptionAsync();
@@ -1861,10 +1886,25 @@ namespace ZedRay
         private void AddVlessLinkFromModal()
         {
             string link = txtVlessLink.Text.Trim();
+            if (string.IsNullOrEmpty(link)) return;
+
+            // If user pasted a subscription URL into the VLESS box:
+            if (link.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || link.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.SubUrl = link;
+                if (string.IsNullOrEmpty(settings.SubName) || settings.SubName == "Obuna" || settings.SubName.StartsWith("http"))
+                    settings.SubName = "MultiCo VPN";
+                SaveData();
+                txtVlessLink.Text = "";
+                modalOverlay.Visibility = Visibility.Collapsed;
+                Dispatcher.BeginInvoke(new Action(async () => await SyncSubscriptionAsync()));
+                return;
+            }
+
             ServerItem parsed = ParseVlessUrl(link);
             if (parsed == null)
             {
-                MessageBox.Show("VLESS havolasi noto'g'ri formatda! 'vless://uuid@host:port?...' ko'rinishida bo'lishi kerak.", "Xatolik", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("VLESS havolasi noto'g'ri formatda!\n'vless://uuid@host:port?...' yoki obuna havolasi (https://...) bo'lishi kerak.", "Xatolik", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             servers.Insert(0, parsed);
@@ -1950,64 +1990,182 @@ namespace ZedRay
             });
         }
 
+        private bool FetchSubscriptionRaw(string url, out string headers, out string body)
+        {
+            headers = "";
+            body = "";
+
+            // 1. Primary: Windows built-in curl.exe (Schannel, ALPN, bypasses Cloudflare bot protection)
+            try
+            {
+                string curlPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "curl.exe");
+                if (!File.Exists(curlPath)) curlPath = "curl.exe";
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = curlPath,
+                    Arguments = "-s -i -L -A \"sing-box/1.14.4\" \"" + url + "\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8
+                };
+
+                using (Process p = Process.Start(psi))
+                {
+                    string output = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(15000);
+
+                    if (!string.IsNullOrEmpty(output))
+                    {
+                        int headerEnd = output.LastIndexOf("\r\n\r\n");
+                        if (headerEnd < 0) headerEnd = output.LastIndexOf("\n\n");
+                        if (headerEnd >= 0)
+                        {
+                            headers = output.Substring(0, headerEnd);
+                            body = output.Substring(headerEnd).Trim();
+                        }
+                        else
+                        {
+                            body = output.Trim();
+                        }
+
+                        if (!string.IsNullOrEmpty(body) && (headers.Contains(" 200 ") || headers.StartsWith("HTTP/1.1 200") || headers.StartsWith("HTTP/2 200")))
+                            return true;
+                    }
+                }
+            }
+            catch { }
+
+            // 2. Fallback: HttpWebRequest with TLS 1.2
+            try
+            {
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                req.UserAgent = "sing-box/1.14.4";
+                req.Timeout = 15000;
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                {
+                    StringBuilder sb = new StringBuilder();
+                    foreach (string key in resp.Headers.AllKeys)
+                    {
+                        sb.AppendLine(key + ": " + resp.Headers[key]);
+                    }
+                    headers = sb.ToString();
+
+                    using (StreamReader sr = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
+                    {
+                        body = sr.ReadToEnd().Trim();
+                    }
+                    return !string.IsNullOrEmpty(body);
+                }
+            }
+            catch (Exception ex)
+            {
+                body = "ERROR: " + ex.Message;
+                return false;
+            }
+        }
+
         private async Task SyncSubscriptionAsync()
         {
             StartSyncSpin();
             try
             {
+                // Smart auto-fix if SubName holds URL
+                if (string.IsNullOrEmpty(settings.SubUrl) && (settings.SubName ?? "").StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.SubUrl = settings.SubName;
+                    settings.SubName = "MultiCo VPN";
+                }
+
                 if (string.IsNullOrEmpty(settings.SubUrl))
                 {
                     await PingAllServersAsync();
                     return;
                 }
-                string userInfo = null;
-                string url = settings.SubUrl;
-                string raw = await Task.Run(() =>
-                {
-                    using (WebClient wc = new WebClient())
-                    {
-                        wc.Encoding = Encoding.UTF8;
-                        wc.Headers.Add("User-Agent", "sing-box/ZedRay");
-                        string d = wc.DownloadString(url);
-                        userInfo = wc.ResponseHeaders != null ? wc.ResponseHeaders["subscription-userinfo"] : null;
-                        return d;
-                    }
-                });
 
+                string url = settings.SubUrl;
+                string headers = "", raw = "";
+
+                bool success = await Task.Run(() => FetchSubscriptionRaw(url, out headers, out raw));
+                if (!success || string.IsNullOrEmpty(raw))
+                {
+                    MessageBox.Show("Obunani yuklab bo'lmadi. Internet ulanishini yoki obuna havolasini tekshiring.\n" + raw, "ZedRay", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // If body is Base64 encoded:
                 if (!raw.Contains("://"))
                 {
-                    try { raw = Encoding.UTF8.GetString(Convert.FromBase64String(raw.Trim())); } catch { }
+                    try
+                    {
+                        byte[] bytes = Convert.FromBase64String(raw.Trim());
+                        raw = Encoding.UTF8.GetString(bytes);
+                    }
+                    catch { }
                 }
 
                 List<ServerItem> newServers = new List<ServerItem>();
                 foreach (string line in raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    ServerItem s = ParseVlessUrl(line.Trim());
-                    if (s != null) { s.Source = "subscription"; newServers.Add(s); }
+                    string trimmed = line.Trim();
+                    if (string.IsNullOrEmpty(trimmed)) continue;
+                    ServerItem s = ParseVlessUrl(trimmed);
+                    if (s != null)
+                    {
+                        s.Source = "subscription";
+                        newServers.Add(s);
+                    }
                 }
 
-                // Real quota from the provider's "subscription-userinfo" header (if it sends one)
+                // Parse Subscription-Userinfo and Profile-Title from headers
                 settings.UsedGb = 0; settings.TotalGb = 0; settings.DaysLeft = 0;
-                if (!string.IsNullOrEmpty(userInfo))
+                foreach (string hLine in headers.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    long up = 0, down = 0, total = 0, exp = 0;
-                    foreach (string part in userInfo.Split(';'))
+                    if (hLine.StartsWith("Profile-Title:", StringComparison.OrdinalIgnoreCase))
                     {
-                        string[] kv = part.Trim().Split('=');
-                        if (kv.Length != 2) continue;
-                        long v; long.TryParse(kv[1].Trim(), out v);
-                        switch (kv[0].Trim().ToLowerInvariant())
+                        string val = hLine.Substring("Profile-Title:".Length).Trim();
+                        if (val.StartsWith("base64:", StringComparison.OrdinalIgnoreCase))
                         {
-                            case "upload": up = v; break;
-                            case "download": down = v; break;
-                            case "total": total = v; break;
-                            case "expire": exp = v; break;
+                            try
+                            {
+                                string dec = Encoding.UTF8.GetString(Convert.FromBase64String(val.Substring("base64:".Length).Trim()));
+                                if (!string.IsNullOrEmpty(dec)) settings.SubName = dec;
+                            }
+                            catch { }
+                        }
+                        else if (!string.IsNullOrEmpty(val))
+                        {
+                            settings.SubName = val;
                         }
                     }
-                    settings.UsedGb = (up + down) / 1073741824.0;
-                    settings.TotalGb = total / 1073741824.0;
-                    if (exp > 0)
-                        settings.DaysLeft = Math.Max(0, (int)Math.Ceiling((DateTimeOffset.FromUnixTimeSeconds(exp) - DateTimeOffset.UtcNow).TotalDays));
+                    else if (hLine.StartsWith("Subscription-Userinfo:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string val = hLine.Substring("Subscription-Userinfo:".Length).Trim();
+                        long up = 0, down = 0, total = 0, exp = 0;
+                        foreach (string part in val.Split(';'))
+                        {
+                            string[] kv = part.Trim().Split('=');
+                            if (kv.Length != 2) continue;
+                            long v; long.TryParse(kv[1].Trim(), out v);
+                            switch (kv[0].Trim().ToLowerInvariant())
+                            {
+                                case "upload": up = v; break;
+                                case "download": down = v; break;
+                                case "total": total = v; break;
+                                case "expire": exp = v; break;
+                            }
+                        }
+                        settings.UsedGb = (up + down) / 1073741824.0;
+                        settings.TotalGb = total / 1073741824.0;
+                        if (exp > 0)
+                        {
+                            DateTimeOffset expDate = DateTimeOffset.FromUnixTimeSeconds(exp);
+                            settings.DaysLeft = Math.Max(0, (int)Math.Ceiling((expDate - DateTimeOffset.UtcNow).TotalDays));
+                        }
+                    }
                 }
 
                 if (newServers.Count == 0)
@@ -2019,6 +2177,12 @@ namespace ZedRay
 
                 List<ServerItem> manual = servers.Where(x => x.Source != "subscription").ToList();
                 servers = newServers.Concat(manual).ToList();
+
+                if (string.IsNullOrEmpty(settings.SelectedServerId) || !servers.Any(s => s.Id == settings.SelectedServerId))
+                {
+                    settings.SelectedServerId = (servers.Count > 1) ? "auto" : servers[0].Id;
+                }
+
                 SaveData();
                 RefreshAllUI();
                 await PingAllServersAsync();
@@ -2082,6 +2246,12 @@ namespace ZedRay
                         settings.UsedGb = double.Parse(s[7], CultureInfo.InvariantCulture);
                         settings.TotalGb = double.Parse(s[8], CultureInfo.InvariantCulture);
                         settings.DaysLeft = int.Parse(s[9]);
+
+                        if (string.IsNullOrEmpty(settings.SubUrl) && (settings.SubName ?? "").StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        {
+                            settings.SubUrl = settings.SubName;
+                            settings.SubName = "MultiCo VPN";
+                        }
                     }
                 }
                 catch { }
