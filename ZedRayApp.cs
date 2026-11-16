@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -6,6 +6,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Globalization;
+using System.Net.NetworkInformation;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
@@ -60,11 +62,11 @@ namespace ZedRay
             Watchdog = true;
             Routing = "rule";
             SelectedServerId = "auto";
-            SubName = "MultiCo VPN";
+            SubName = "";
             SubUrl = "";
-            UsedGb = 65.86;
-            TotalGb = 10240.0;
-            DaysLeft = 348;
+            UsedGb = 0;
+            TotalGb = 0;
+            DaysLeft = 0;
         }
     }
 
@@ -126,6 +128,9 @@ namespace ZedRay
         private TextBox searchBox;
         private Border autoSelectCard;
         private StackPanel serversStack;
+        private Border subProgressBg;
+        private Grid subStatsGrid;
+        private long lastRx = -1, lastTx = -1;
 
         // Settings Controls
         private CheckBox chkTunMode;
@@ -608,17 +613,17 @@ namespace ZedRay
             subTop.Children.Add(subBtns);
             subSp.Children.Add(subTop);
 
-            Border progBg = new Border { Height = 6, Background = BrushFromHex("#090D18"), CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 10, 0, 8) };
-            subProgressFill = new Border { Height = 6, Width = 60, HorizontalAlignment = HorizontalAlignment.Left, Background = BrushFromHex("#00F2FE"), CornerRadius = new CornerRadius(3) };
-            progBg.Child = subProgressFill;
-            subSp.Children.Add(progBg);
+            subProgressBg = new Border { Height = 6, Background = BrushFromHex("#090D18"), CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 10, 0, 8) };
+            subProgressFill = new Border { Height = 6, HorizontalAlignment = HorizontalAlignment.Stretch, Background = BrushFromHex("#00F2FE"), CornerRadius = new CornerRadius(3), RenderTransform = new ScaleTransform(0, 1) };
+            subProgressBg.Child = subProgressFill;
+            subSp.Children.Add(subProgressBg);
 
-            Grid subStats = new Grid();
-            subUsageText = new TextBlock { Text = "65.86 GB / 10240 GB", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = BrushFromHex("#CBD5E1") };
-            subDaysText = new TextBlock { Text = "348 kun qoldi", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#10B981"), HorizontalAlignment = HorizontalAlignment.Right };
-            subStats.Children.Add(subUsageText);
-            subStats.Children.Add(subDaysText);
-            subSp.Children.Add(subStats);
+            subStatsGrid = new Grid();
+            subUsageText = new TextBlock { Text = "", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = BrushFromHex("#CBD5E1") };
+            subDaysText = new TextBlock { Text = "", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#10B981"), HorizontalAlignment = HorizontalAlignment.Right };
+            subStatsGrid.Children.Add(subUsageText);
+            subStatsGrid.Children.Add(subDaysText);
+            subSp.Children.Add(subStatsGrid);
 
             subCard.Child = subSp;
             g.Children.Add(subCard);
@@ -1037,10 +1042,26 @@ namespace ZedRay
         private void RefreshAllUI()
         {
             modeBadgeText.Text = (settings.Mode == "tun") ? "TUN (TO'LIQ VPN)" : "SYSTEM PROXY";
-            subTitleText.Text = settings.SubName;
-            subMetaText.Text = string.Format("{0} ta server · VLESS Reality", servers.Count);
-            subUsageText.Text = string.Format("{0:0.00} GB / {1:0} GB", settings.UsedGb, settings.TotalGb);
-            subDaysText.Text = string.Format("{0} kun qoldi", settings.DaysLeft);
+            bool hasSub = !string.IsNullOrEmpty(settings.SubUrl);
+            bool hasQuota = hasSub && settings.TotalGb > 0;
+            if (hasSub)
+            {
+                subTitleText.Text = string.IsNullOrEmpty(settings.SubName) ? "Obuna" : settings.SubName;
+                subMetaText.Text = string.Format("{0} ta server obunadan", servers.Count(s => s.Source == "subscription"));
+                subUsageText.Text = string.Format("{0:0.00} GB / {1:0.##} GB", settings.UsedGb, settings.TotalGb);
+                subDaysText.Text = settings.DaysLeft > 0 ? string.Format("{0} kun qoldi", settings.DaysLeft) : "Muddatsiz";
+                double ratio = hasQuota ? Math.Min(1.0, settings.UsedGb / settings.TotalGb) : 0;
+                subProgressFill.RenderTransform = new ScaleTransform(ratio, 1);
+            }
+            else
+            {
+                subTitleText.Text = "Obuna qo'shilmagan";
+                subMetaText.Text = servers.Count > 0
+                    ? string.Format("{0} ta server qo'lda qo'shilgan", servers.Count)
+                    : "Boshlash uchun «+ Server qo'shish» ni bosing";
+            }
+            subProgressBg.Visibility = hasQuota ? Visibility.Visible : Visibility.Collapsed;
+            subStatsGrid.Visibility = hasQuota ? Visibility.Visible : Visibility.Collapsed;
 
             RenderServerList();
             UpdateActiveServerPreview();
@@ -1051,6 +1072,30 @@ namespace ZedRay
         {
             if (serversStack == null) return;
             serversStack.Children.Clear();
+
+            autoSelectCard.Visibility = servers.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+            if (servers.Count == 0)
+            {
+                Border empty = new Border
+                {
+                    Background = BrushFromHex("#0F1320"),
+                    BorderBrush = BrushFromHex("#242D4A"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(14),
+                    Padding = new Thickness(18, 22, 18, 22)
+                };
+                StackPanel es = new StackPanel();
+                es.Children.Add(new TextBlock { Text = "Hali server qo'shilmagan", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center });
+                es.Children.Add(new TextBlock
+                {
+                    Text = "Yuqoridagi «+ Server qo'shish» tugmasini bosing va vless:// havolangizni yoki obuna URL'ingizni kiriting.",
+                    FontSize = 11.5, Foreground = BrushFromHex("#94A3B8"), TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 6, 0, 0)
+                });
+                empty.Child = es;
+                serversStack.Children.Add(empty);
+                return;
+            }
 
             autoSelectCard.BorderBrush = (settings.SelectedServerId == "auto") ? BrushFromHex("#00F2FE") : BrushFromHex("#1F263D");
             autoSelectCard.Background = (settings.SelectedServerId == "auto") ? BrushFromHex("#132038") : BrushFromHex("#111524");
@@ -1097,7 +1142,7 @@ namespace ZedRay
                 g.Children.Add(mid);
 
                 StackPanel right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-                string pingStr = (srv.Ping > 0) ? (srv.Ping + " ms") : "Timeout";
+                string pingStr = (srv.Ping > 0) ? (srv.Ping + " ms") : (srv.Ping < 0 ? "Timeout" : "—");
                 string pingColor = (srv.Ping <= 0) ? "#64748B" : (srv.Ping < 100 ? "#10B981" : (srv.Ping < 220 ? "#F59E0B" : "#EF4444"));
 
                 Border pingBadge = new Border
@@ -1159,12 +1204,19 @@ namespace ZedRay
         private void UpdateActiveServerPreview()
         {
             ServerItem target = activeServer ?? GetTargetServer();
-            if (target == null) return;
+            if (target == null)
+            {
+                activeFlagContainer.Children.Clear();
+                activeServerNameText.Text = "Server tanlanmagan";
+                activeServerMetaText.Text = "Serverlar bo'limidan VLESS link qo'shing";
+                return;
+            }
 
             activeFlagContainer.Children.Clear();
             activeFlagContainer.Children.Add(CreateFlagBadge(target.Country + " " + target.Name));
             activeServerNameText.Text = (settings.SelectedServerId == "auto") ? ("Auto · " + target.Name) : target.Name;
-            activeServerMetaText.Text = string.Format("VLESS · {0} · {1} ms", (target.Security ?? "REALITY").ToUpper(), target.Ping > 0 ? target.Ping : 64);
+            activeServerMetaText.Text = string.Format("VLESS · {0} · {1}", (target.Security ?? "REALITY").ToUpper(),
+                target.Ping > 0 ? (target.Ping + " ms") : (target.Ping < 0 ? "Timeout" : "ping o'lchanmagan"));
         }
 
         // ================= VPN CORE ENGINE (SING-BOX) =================
@@ -1391,13 +1443,12 @@ namespace ZedRay
             uiTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             uiTimer.Tick += (s, e) =>
             {
+                double dl, ul;
+                MeasureRealThroughput(out dl, out ul);
                 if (isConnected)
                 {
                     TimeSpan elapsed = DateTime.Now - connectStartTime;
                     timerText.Text = elapsed.ToString(@"hh\:mm\:ss");
-
-                    double dl = Math.Round(rng.NextDouble() * 14.5 + 4.2, 1);
-                    double ul = Math.Round(rng.NextDouble() * 3.8 + 0.9, 1);
                     speedDownText.Text = dl.ToString("0.0") + " MB/s";
                     speedUpText.Text = ul.ToString("0.0") + " MB/s";
 
@@ -1433,6 +1484,32 @@ namespace ZedRay
                 }
             };
             watchdogTimer.Start();
+        }
+
+        // Real system throughput (physical adapters only, virtual tunnels excluded to avoid double counting)
+        private void MeasureRealThroughput(out double dlMBps, out double ulMBps)
+        {
+            dlMBps = 0; ulMBps = 0;
+            try
+            {
+                long rx = 0, tx = 0;
+                foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != OperationalStatus.Up) continue;
+                    if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback || ni.NetworkInterfaceType == NetworkInterfaceType.Tunnel) continue;
+                    string d = (ni.Description + " " + ni.Name).ToLowerInvariant();
+                    if (d.Contains("wintun") || d.Contains("tun") || d.Contains("virtual") || d.Contains("vpn")) continue;
+                    IPv4InterfaceStatistics st = ni.GetIPv4Statistics();
+                    rx += st.BytesReceived; tx += st.BytesSent;
+                }
+                if (lastRx >= 0 && rx >= lastRx && tx >= lastTx)
+                {
+                    dlMBps = (rx - lastRx) / 1048576.0;
+                    ulMBps = (tx - lastTx) / 1048576.0;
+                }
+                lastRx = rx; lastTx = tx;
+            }
+            catch { }
         }
 
         private void DrawSpeedGraph()
@@ -1499,7 +1576,7 @@ namespace ZedRay
             var tasks = servers.Select(async srv =>
             {
                 int p = await TestTcpPingAsync(srv.Host, srv.Port);
-                srv.Ping = p > 0 ? p : 68;
+                srv.Ping = p;
             });
             await Task.WhenAll(tasks);
             SaveData();
@@ -1520,6 +1597,14 @@ namespace ZedRay
             SaveData();
             txtVlessLink.Text = "";
             modalOverlay.Visibility = Visibility.Collapsed;
+            RefreshAllUI();
+            PingNewServer(parsed);
+        }
+
+        private async void PingNewServer(ServerItem s)
+        {
+            s.Ping = await TestTcpPingAsync(s.Host, s.Port, 2500);
+            SaveData();
             RefreshAllUI();
         }
 
@@ -1557,7 +1642,7 @@ namespace ZedRay
                     PublicKey = query.ContainsKey("pbk") ? query["pbk"] : "",
                     ShortId = query.ContainsKey("sid") ? query["sid"] : "",
                     Flow = query.ContainsKey("flow") ? query["flow"] : "",
-                    Ping = 55,
+                    Ping = 0,
                     Source = "manual"
                 };
             }
@@ -1573,12 +1658,17 @@ namespace ZedRay
             }
             try
             {
+                string userInfo = null;
+                string url = settings.SubUrl;
                 string raw = await Task.Run(() =>
                 {
                     using (WebClient wc = new WebClient())
                     {
-                        wc.Headers.Add("User-Agent", "Hiddify/ZedRay/sing-box");
-                        return wc.DownloadString(settings.SubUrl);
+                        wc.Encoding = Encoding.UTF8;
+                        wc.Headers.Add("User-Agent", "sing-box/ZedRay");
+                        string d = wc.DownloadString(url);
+                        userInfo = wc.ResponseHeaders != null ? wc.ResponseHeaders["subscription-userinfo"] : null;
+                        return d;
                     }
                 });
 
@@ -1594,12 +1684,42 @@ namespace ZedRay
                     if (s != null) { s.Source = "subscription"; newServers.Add(s); }
                 }
 
-                if (newServers.Count > 0)
+                // Real quota from the provider's "subscription-userinfo" header (if it sends one)
+                settings.UsedGb = 0; settings.TotalGb = 0; settings.DaysLeft = 0;
+                if (!string.IsNullOrEmpty(userInfo))
                 {
-                    servers = newServers;
-                    SaveData();
-                    await PingAllServersAsync();
+                    long up = 0, down = 0, total = 0, exp = 0;
+                    foreach (string part in userInfo.Split(';'))
+                    {
+                        string[] kv = part.Trim().Split('=');
+                        if (kv.Length != 2) continue;
+                        long v; long.TryParse(kv[1].Trim(), out v);
+                        switch (kv[0].Trim().ToLowerInvariant())
+                        {
+                            case "upload": up = v; break;
+                            case "download": down = v; break;
+                            case "total": total = v; break;
+                            case "expire": exp = v; break;
+                        }
+                    }
+                    settings.UsedGb = (up + down) / 1073741824.0;
+                    settings.TotalGb = total / 1073741824.0;
+                    if (exp > 0)
+                        settings.DaysLeft = Math.Max(0, (int)Math.Ceiling((DateTimeOffset.FromUnixTimeSeconds(exp) - DateTimeOffset.UtcNow).TotalDays));
                 }
+
+                if (newServers.Count == 0)
+                {
+                    MessageBox.Show("Obunadan birorta ham VLESS server topilmadi.", "ZedRay", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    SaveData(); RefreshAllUI();
+                    return;
+                }
+
+                List<ServerItem> manual = servers.Where(x => x.Source != "subscription").ToList();
+                servers = newServers.Concat(manual).ToList();
+                SaveData();
+                RefreshAllUI();
+                await PingAllServersAsync();
             }
             catch (Exception ex)
             {
@@ -1607,7 +1727,9 @@ namespace ZedRay
             }
         }
 
-        // ================= PERSISTENCE (SAFE LOCAL STORAGE) =================
+        // ================= PERSISTENCE (LOCAL ONLY, git-ignored) =================
+        private static string Clean(string s) { return (s ?? "").Replace("|", " ").Replace("\r", "").Replace("\n", ""); }
+
         private void LoadData()
         {
             if (File.Exists(serversFile))
@@ -1625,23 +1747,13 @@ namespace ZedRay
                                 Port = int.Parse(p[4]), Uuid = p[5], Network = p[6],
                                 Security = p[7], Sni = p[8], Fingerprint = p[9],
                                 PublicKey = p[10], ShortId = p[11], Flow = p[12],
-                                Ping = p.Length > 13 ? int.Parse(p[13]) : 60
+                                Ping = p.Length > 13 ? int.Parse(p[13]) : 0,
+                                Source = p.Length > 14 ? p[14] : "manual"
                             });
                         }
                     }
                 }
                 catch { }
-            }
-
-            if (servers.Count == 0)
-            {
-                servers = new List<ServerItem>
-                {
-                    new ServerItem { Id="hk1", Name="Hong Kong • Turbo 5G", Country="HK", Host="185.196.220.10", Port=443, Uuid="11111111-2222-3333-4444-555555555555", Network="tcp", Security="reality", Sni="yahoo.com", Fingerprint="chrome", PublicKey="sample_key", ShortId="1234", Flow="xtls-rprx-vision", Ping=64 },
-                    new ServerItem { Id="hk2", Name="Hong Kong • VIP 1", Country="HK", Host="185.196.220.11", Port=443, Uuid="22222222-3333-4444-5555-666666666666", Network="tcp", Security="reality", Sni="microsoft.com", Fingerprint="chrome", PublicKey="sample_key", ShortId="1234", Flow="xtls-rprx-vision", Ping=61 },
-                    new ServerItem { Id="de1", Name="Germany • Frankfurt Core", Country="DE", Host="194.26.29.40", Port=443, Uuid="33333333-4444-5555-6666-777777777777", Network="tcp", Security="reality", Sni="cloudflare.com", Fingerprint="chrome", PublicKey="sample_key", ShortId="1234", Flow="xtls-rprx-vision", Ping=92 },
-                    new ServerItem { Id="eu1", Name="Europe • Ultra Stable", Country="EU", Host="194.26.29.41", Port=443, Uuid="44444444-5555-6666-7777-888888888888", Network="tcp", Security="reality", Sni="apple.com", Fingerprint="chrome", PublicKey="sample_key", ShortId="1234", Flow="xtls-rprx-vision", Ping=118 }
-                };
             }
 
             if (File.Exists(settingsFile))
@@ -1657,6 +1769,14 @@ namespace ZedRay
                         settings.Routing = s[3];
                         settings.SelectedServerId = s[4];
                     }
+                    if (s.Length >= 10)
+                    {
+                        settings.SubName = s[5];
+                        settings.SubUrl = s[6];
+                        settings.UsedGb = double.Parse(s[7], CultureInfo.InvariantCulture);
+                        settings.TotalGb = double.Parse(s[8], CultureInfo.InvariantCulture);
+                        settings.DaysLeft = int.Parse(s[9]);
+                    }
                 }
                 catch { }
             }
@@ -1667,10 +1787,14 @@ namespace ZedRay
             try
             {
                 List<string> lines = servers.Select(s => string.Join("|",
-                    s.Id, s.Name, s.Country, s.Host, s.Port, s.Uuid, s.Network, s.Security, s.Sni, s.Fingerprint, s.PublicKey, s.ShortId, s.Flow, s.Ping)).ToList();
+                    Clean(s.Id), Clean(s.Name), Clean(s.Country), Clean(s.Host), s.Port, Clean(s.Uuid), Clean(s.Network),
+                    Clean(s.Security), Clean(s.Sni), Clean(s.Fingerprint), Clean(s.PublicKey), Clean(s.ShortId), Clean(s.Flow),
+                    s.Ping, Clean(s.Source))).ToList();
                 File.WriteAllLines(serversFile, lines, Encoding.UTF8);
 
-                string cfg = string.Join("|", settings.Mode, settings.Mtu, settings.Watchdog, settings.Routing, settings.SelectedServerId);
+                string cfg = string.Join("|", settings.Mode, settings.Mtu, settings.Watchdog, settings.Routing, settings.SelectedServerId,
+                    Clean(settings.SubName), Clean(settings.SubUrl),
+                    settings.UsedGb.ToString(CultureInfo.InvariantCulture), settings.TotalGb.ToString(CultureInfo.InvariantCulture), settings.DaysLeft);
                 File.WriteAllText(settingsFile, cfg, Encoding.UTF8);
             }
             catch { }
