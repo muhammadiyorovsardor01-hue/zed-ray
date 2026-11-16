@@ -9,7 +9,7 @@ async function resolveHostToIp(host) {
     return host;
   }
   try {
-    const lookup = await dns.lookup(host);
+    const lookup = await dns.lookup(host, { family: 4 });
     return lookup.address;
   } catch {
     return null;
@@ -17,7 +17,14 @@ async function resolveHostToIp(host) {
 }
 
 /**
- * Generates production-grade, anti-disconnection sing-box configuration.
+ * Generates a sing-box 1.14+ compatible configuration.
+ *
+ * Migration notes (sing-box 1.10 -> 1.14):
+ *  - tun `inet4_address`            -> `address` (array)
+ *  - inbound `sniff`                -> route rule `{ action: "sniff" }`
+ *  - `dns` / `block` outbounds      -> route rule action `hijack-dns` / `reject`
+ *  - legacy DNS servers (`address`) -> typed servers (`type`, `server`)
+ *  - dns rule `outbound: any`       -> `route.default_domain_resolver`
  */
 async function generateSingboxConfig(server, options = {}) {
   const {
@@ -42,17 +49,19 @@ async function generateSingboxConfig(server, options = {}) {
     inbounds.push({
       type: 'tun',
       tag: 'tun-in',
-      interface_name: 'NexusTun',
-      inet4_address: '172.19.0.1/30',
+      interface_name: 'ZedRayTun',
+      address: ['172.19.0.1/30'],
       mtu: mtu,
       auto_route: true,
       strict_route: true,
-      stack: 'gvisor', // gvisor user-space stack is resilient against Windows sleep/wake drops
-      sniff: true
+      stack: 'gvisor' // gvisor user-space stack is resilient against Windows sleep/wake drops
     });
   }
 
-  // Construct Outbound based on server type
+  // Outbound `network` only accepts "tcp" / "udp" (the transport type such as
+  // ws/grpc lives in `transport`), so never forward values like "ws" here.
+  const network = server.network === 'udp' ? 'udp' : undefined;
+
   const proxyOutbound = {
     type: server.type || 'vless',
     tag: 'proxy',
@@ -60,7 +69,7 @@ async function generateSingboxConfig(server, options = {}) {
     server_port: server.server_port,
     uuid: server.uuid,
     flow: server.flow || undefined,
-    network: server.network || 'tcp',
+    network,
     tls: server.tls,
     transport: server.transport
   };
@@ -70,52 +79,38 @@ async function generateSingboxConfig(server, options = {}) {
     {
       type: 'direct',
       tag: 'direct'
-    },
-    {
-      type: 'block',
-      tag: 'block'
-    },
-    {
-      type: 'dns',
-      tag: 'dns-out'
     }
   ];
 
-  // DNS Configuration to avoid DNS leaks and Windows Multi-Homed stalls
+  // DNS: encrypted DoH through the tunnel, system resolver only for bootstrap
   const dnsConfig = {
     servers: [
       {
+        type: 'https',
         tag: 'dns-remote',
-        address: 'https://1.1.1.1/dns-query',
+        server: '1.1.1.1',
         detour: 'proxy'
       },
       {
-        tag: 'dns-direct',
-        address: 'local',
-        detour: 'direct'
+        type: 'local',
+        tag: 'dns-direct'
       }
     ],
-    rules: [
-      {
-        outbound: 'any',
-        server: 'dns-direct'
-      }
-    ],
+    final: 'dns-remote',
     strategy: 'ipv4_only'
   };
 
   // Route rules
   const rules = [
-    {
-      protocol: 'dns',
-      outbound: 'dns-out'
-    }
+    { action: 'sniff' },
+    { protocol: 'dns', action: 'hijack-dns' }
   ];
 
   // Anti-looping rule: Direct access for server's own IP
   if (serverIp) {
     rules.push({
       ip_cidr: [`${serverIp}/32`],
+      action: 'route',
       outbound: 'direct'
     });
   }
@@ -124,6 +119,7 @@ async function generateSingboxConfig(server, options = {}) {
     // Bypass Private / Local LAN
     rules.push({
       ip_is_private: true,
+      action: 'route',
       outbound: 'direct'
     });
   }
@@ -131,6 +127,8 @@ async function generateSingboxConfig(server, options = {}) {
   const routeConfig = {
     rules: rules,
     auto_detect_interface: true,
+    // Used to resolve the proxy server's own domain name (if it is not an IP)
+    default_domain_resolver: 'dns-direct',
     final: 'proxy'
   };
 

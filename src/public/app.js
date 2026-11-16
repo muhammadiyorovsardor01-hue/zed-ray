@@ -16,6 +16,16 @@ let appState = {
   speedInterval: null
 };
 
+// Server names come from third-party subscriptions: never inject them as raw HTML.
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ================= DOM ELEMENTS =================
 const searchInput = document.getElementById('searchInput');
 const searchContainer = document.getElementById('searchContainer');
@@ -206,13 +216,13 @@ function renderServers() {
       <div class="server-left">
         <div class="server-flag-wrap">${flagSvg}</div>
         <div>
-          <div class="server-name">${srv.name}</div>
+          <div class="server-name">${escapeHtml(srv.name)}</div>
           <div class="server-meta">VLESS · ${srv.network ? srv.network.toUpperCase() : 'TCP'} / ${srv.security ? srv.security.toUpperCase() : 'REALITY'}</div>
         </div>
       </div>
       <div class="server-right">
         <div class="ping-pill ${pingClass}">${pingText}</div>
-        <button class="server-menu-btn" title="O'chirish" data-id="${srv.id}">
+        <button class="server-menu-btn" title="O'chirish" data-id="${escapeHtml(srv.id)}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>

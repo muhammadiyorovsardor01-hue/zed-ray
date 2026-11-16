@@ -14,22 +14,32 @@ const singbox = new SingboxManager();
 
 let subscriptionInfo = { ...INITIAL_SUBSCRIPTION };
 
-// Helper to send JSON responses
+const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
+const VALID_MODES = new Set(['tun', 'system_proxy']);
+const VALID_ROUTING = new Set(['rule', 'global']);
+
+// Helper to send JSON responses.
+// No CORS headers on purpose: the UI is served from this very server (same origin),
+// and a wildcard CORS policy would let any website you open control your VPN.
 function sendJson(res, data, status = 200) {
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
-  });
+  res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
 }
 
-// Parse request body
+// Parse request body (size-limited)
 function parseBody(req) {
   return new Promise((resolve) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        req.destroy();
+        return resolve({});
+      }
+      body += chunk;
+    });
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {});
@@ -37,36 +47,88 @@ function parseBody(req) {
         resolve({});
       }
     });
+    req.on('error', () => resolve({}));
   });
 }
 
-// Helper to determine country emoji by server name
+// Helper to determine country emoji by server name.
+// Two-letter codes must match as whole words ("us" must not match "Russia" or "Plus").
 function detectFlag(name) {
-  const lower = name.toLowerCase();
-  if (lower.includes('hong kong') || lower.includes('hk')) return '🇭🇰';
-  if (lower.includes('europe') || lower.includes('eu')) return '🇪🇺';
-  if (lower.includes('united states') || lower.includes('usa') || lower.includes('us')) return '🇺🇸';
-  if (lower.includes('germany') || lower.includes('de')) return '🇩🇪';
-  if (lower.includes('singapore') || lower.includes('sg')) return '🇸🇬';
-  if (lower.includes('japan') || lower.includes('jp')) return '🇯🇵';
-  if (lower.includes('turkey') || lower.includes('tr')) return '🇹🇷';
-  if (lower.includes('russia') || lower.includes('ru')) return '🇷🇺';
-  if (lower.includes('uzbekistan') || lower.includes('uz')) return '🇺🇿';
+  const lower = String(name || '').toLowerCase();
+  const has = (...words) => words.some(w => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(lower));
+  if (has('hong kong', 'hongkong', 'hk')) return '🇭🇰';
+  if (has('europe', 'eu')) return '🇪🇺';
+  if (has('united states', 'usa', 'us', 'america')) return '🇺🇸';
+  if (has('germany', 'de')) return '🇩🇪';
+  if (has('singapore', 'sg')) return '🇸🇬';
+  if (has('japan', 'jp')) return '🇯🇵';
+  if (has('turkey', 'turkiye', 'tr')) return '🇹🇷';
+  if (has('russia', 'ru')) return '🇷🇺';
+  if (has('uzbekistan', 'uz')) return '🇺🇿';
   return '🌐';
 }
 
-const server = http.createServer(async (req, res) => {
-  // CORS Preflight
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
+// Fetch a subscription URL: follows redirects, enforces a timeout and a size cap.
+function fetchSubscription(targetUrl, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(targetUrl);
+    } catch {
+      return reject(new Error('Invalid subscription URL'));
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return reject(new Error('Only http(s) subscription URLs are supported'));
+    }
+
+    const client = parsed.protocol === 'https:' ? https : http;
+    const req = client.get(parsed, { headers: { 'User-Agent': 'v2rayN/sing-box/Hiddify' }, timeout: 15000 }, (resp) => {
+      if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+        resp.resume();
+        if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
+        return resolve(fetchSubscription(new URL(resp.headers.location, parsed).toString(), redirectsLeft - 1));
+      }
+      if (resp.statusCode !== 200) {
+        resp.resume();
+        return reject(new Error(`Server responded with HTTP ${resp.statusCode}`));
+      }
+
+      let data = '';
+      let size = 0;
+      resp.setEncoding('utf8');
+      resp.on('data', chunk => {
+        size += chunk.length;
+        if (size > 5 * MAX_BODY_BYTES) {
+          req.destroy(new Error('Subscription is too large'));
+          return;
+        }
+        data += chunk;
+      });
+      resp.on('end', () => resolve({ data, userInfo: resp.headers['subscription-userinfo'] }));
+      resp.on('error', reject);
     });
-    return res.end();
+    req.on('timeout', () => req.destroy(new Error('Request timed out')));
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  // Reject requests with an unexpected Host header (DNS-rebinding protection)
+  if (!ALLOWED_HOSTS.has(String(req.headers.host || '').toLowerCase())) {
+    res.writeHead(403);
+    return res.end('Forbidden');
   }
 
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+  // Reject cross-site state-changing requests (CSRF protection)
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const origin = req.headers.origin;
+    if (origin && !ALLOWED_HOSTS.has(origin.replace(/^https?:\/\//, '').toLowerCase())) {
+      res.writeHead(403);
+      return res.end('Forbidden');
+    }
+  }
+
+  const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
   // --- API ROUTES ---
   if (url.pathname === '/api/status' && req.method === 'GET') {
@@ -115,7 +177,8 @@ const server = http.createServer(async (req, res) => {
     const result = await singbox.start(targetServer, {
       mode: settings.mode,
       mtu: settings.mtu,
-      routingMode: settings.routingMode
+      routingMode: settings.routingMode,
+      autoReconnect: settings.autoReconnect
     });
 
     return sendJson(res, { ...result, activeServer: targetServer });
@@ -171,20 +234,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const fetchSubscription = (targetUrl) => {
-        return new Promise((resolve, reject) => {
-          const client = targetUrl.startsWith('https') ? https : http;
-          client.get(targetUrl, { headers: { 'User-Agent': 'v2rayN/sing-box/Hiddify' } }, (resp) => {
-            let data = '';
-            resp.on('data', chunk => data += chunk);
-            resp.on('end', () => {
-              const userInfo = resp.headers['subscription-userinfo'];
-              resolve({ data, userInfo });
-            });
-          }).on('error', reject);
-        });
-      };
-
       const result = await fetchSubscription(subUrl);
       const parsedServers = parseSubscriptionContent(result.data);
 
@@ -230,7 +279,15 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/settings' && req.method === 'POST') {
     const body = await parseBody(req);
     const current = getSettings();
-    const updated = { ...current, ...body };
+    const updated = { ...current };
+
+    // Whitelist + validate: never persist arbitrary keys or out-of-range values
+    if (VALID_MODES.has(body.mode)) updated.mode = body.mode;
+    if (VALID_ROUTING.has(body.routingMode)) updated.routingMode = body.routingMode;
+    if (Number.isInteger(body.mtu) && body.mtu >= 1280 && body.mtu <= 1500) updated.mtu = body.mtu;
+    if (typeof body.autoReconnect === 'boolean') updated.autoReconnect = body.autoReconnect;
+    if (typeof body.selectedServerId === 'string') updated.selectedServerId = body.selectedServerId;
+
     saveSettings(updated);
     return sendJson(res, { success: true, settings: updated });
   }
@@ -245,9 +302,17 @@ const server = http.createServer(async (req, res) => {
 
   // --- STATIC FILES SERVING ---
   let reqPath = url.pathname === '/' ? '/index.html' : url.pathname;
+  try {
+    reqPath = decodeURIComponent(reqPath);
+  } catch {
+    res.writeHead(400);
+    return res.end('Bad request');
+  }
   let filePath = path.join(PUBLIC_DIR, reqPath);
 
-  if (!fs.existsSync(filePath)) {
+  // Stay inside the public directory and only serve real files
+  const insidePublic = filePath === PUBLIC_DIR || filePath.startsWith(PUBLIC_DIR + path.sep);
+  if (!insidePublic || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
     filePath = path.join(PUBLIC_DIR, 'index.html');
   }
 
