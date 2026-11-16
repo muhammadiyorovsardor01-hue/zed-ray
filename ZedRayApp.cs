@@ -18,6 +18,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using System.Windows.Media.Animation;
 using Microsoft.Win32;
 
 namespace ZedRay
@@ -133,11 +134,14 @@ namespace ZedRay
         private long lastRx = -1, lastTx = -1;
 
         // Settings Controls
-        private CheckBox chkTunMode;
+        private Border modeCardProxy;
+        private Border modeCardTun;
         private CheckBox chkWatchdog;
         private ComboBox cmbMtu;
-        private RadioButton rbRouteRule;
-        private RadioButton rbRouteGlobal;
+        private Border routeCardSmart;
+        private Border routeCardGlobal;
+        private RotateTransform syncRotateTransform;
+        private TextBlock searchPlaceholder;
 
         // Modal Overlay
         private Grid modalOverlay;
@@ -594,16 +598,49 @@ namespace ZedRay
             subTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             subTop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            StackPanel subTitles = new StackPanel();
-            subTitleText = new TextBlock { Text = settings.SubName, FontSize = 16, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White };
-            subMetaText = new TextBlock { Text = "4 ta faol server · VLESS Reality", FontSize = 11, Foreground = BrushFromHex("#93C5FD"), Margin = new Thickness(0, 2, 0, 0) };
+            StackPanel subTitles = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+            subTitleText = new TextBlock { Text = settings.SubName, FontSize = 16, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap };
+            subMetaText = new TextBlock { Text = "4 ta faol server · VLESS Reality", FontSize = 11, Foreground = BrushFromHex("#93C5FD"), Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
             subTitles.Children.Add(subTitleText);
             subTitles.Children.Add(subMetaText);
             subTop.Children.Add(subTitles);
 
             StackPanel subBtns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            Button btnSync = CreateActionPillButton("🔄 Yangilash", "#172542", "#00F2FE");
+            
+            // Spinning Refresh Button
+            Button btnSync = new Button
+            {
+                Padding = new Thickness(10, 5, 10, 5),
+                Background = BrushFromHex("#172542"),
+                Foreground = BrushFromHex("#00F2FE"),
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand,
+                Template = CreateRoundedButtonTemplate(8)
+            };
+            StackPanel syncContent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            syncRotateTransform = new RotateTransform(0);
+            TextBlock syncIcon = new TextBlock
+            {
+                Text = "🔄",
+                FontSize = 11,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = syncRotateTransform,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 5, 0)
+            };
+            TextBlock syncText = new TextBlock
+            {
+                Text = "Yangilash",
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Foreground = BrushFromHex("#00F2FE"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            syncContent.Children.Add(syncIcon);
+            syncContent.Children.Add(syncText);
+            btnSync.Content = syncContent;
             btnSync.Click += async (s, e) => await SyncSubscriptionAsync();
+
             Button btnAdd = CreateActionPillButton("+ Server qo'shish", "#00F2FE", "#04101E");
             btnAdd.Margin = new Thickness(6, 0, 0, 0);
             btnAdd.Click += (s, e) => { modalOverlay.Visibility = Visibility.Visible; };
@@ -641,6 +678,16 @@ namespace ZedRay
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(10, 6, 10, 6)
             };
+            Grid searchWrap = new Grid();
+            searchPlaceholder = new TextBlock
+            {
+                Text = "🔍 Server nomi yoki IP bo'yicha qidirish...",
+                Foreground = BrushFromHex("#64748B"),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 0, 0),
+                IsHitTestVisible = false
+            };
             searchBox = new TextBox
             {
                 Background = Brushes.Transparent,
@@ -650,8 +697,14 @@ namespace ZedRay
                 FontSize = 12.5,
                 Text = ""
             };
-            searchBox.TextChanged += (s, e) => RenderServerList();
-            searchBorder.Child = searchBox;
+            searchBox.TextChanged += (s, e) =>
+            {
+                searchPlaceholder.Visibility = string.IsNullOrEmpty(searchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+                RenderServerList();
+            };
+            searchWrap.Children.Add(searchPlaceholder);
+            searchWrap.Children.Add(searchBox);
+            searchBorder.Child = searchWrap;
             searchGrid.Children.Add(searchBorder);
 
             Button btnPingAll = CreateActionPillButton("⚡ Ping Test", "#171D30", "#00F2FE");
@@ -701,103 +754,291 @@ namespace ZedRay
         private Grid BuildRoutingTab()
         {
             Grid g = new Grid();
-            StackPanel sp = new StackPanel();
+            ScrollViewer sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            StackPanel sp = new StackPanel { Margin = new Thickness(0, 0, 4, 10) };
 
-            Border card = new Border
+            // Header Section
+            TextBlock title = new TextBlock
             {
-                Background = BrushFromHex("#111524"),
+                Text = "Marshrutlash Rejimlari (Routing Mode)",
+                FontSize = 15,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 4, 0, 10)
+            };
+            sp.Children.Add(title);
+
+            // 1. Smart Bypass Card
+            routeCardSmart = new Border
+            {
+                Background = BrushFromHex("#121D38"),
+                BorderBrush = BrushFromHex("#00F2FE"),
+                BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 12, 14, 12),
+                Margin = new Thickness(0, 0, 0, 10),
+                Cursor = Cursors.Hand
+            };
+            routeCardSmart.MouseLeftButtonDown += (s, e) =>
+            {
+                settings.Routing = "rule";
+                SaveData();
+                UpdateRoutingUI();
+            };
+
+            StackPanel smartSp = new StackPanel();
+            Grid smartTop = new Grid();
+            smartTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            smartTop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel smartTitleRow = new StackPanel { Orientation = Orientation.Horizontal };
+            smartTitleRow.Children.Add(new TextBlock { Text = "🎯 ", FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            smartTitleRow.Children.Add(new TextBlock { Text = "Smart Bypass (Aqlli Marshrut)", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
+            smartTop.Children.Add(smartTitleRow);
+
+            Border smartBadge = new Border
+            {
+                Background = BrushFromHex("#064E3B"),
+                BorderBrush = BrushFromHex("#10B981"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8, 2, 8, 2)
+            };
+            smartBadge.Child = new TextBlock { Text = "TAVSIYA ETILADI", FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#6EE7B7") };
+            Grid.SetColumn(smartBadge, 1);
+            smartTop.Children.Add(smartBadge);
+            smartSp.Children.Add(smartTop);
+
+            TextBlock smartDesc = new TextBlock
+            {
+                Text = "Lokal tarmoq (LAN, Wi-Fi router, 192.168.x.x, 127.0.0.1) va VPN serverining o'z IP manzili to'g'ridan-to'g'ri (Direct) ulanadi. Faqat tashqi xorijiy saytlar (YouTube, Telegram, Instagram va b.) xavfsiz VLESS tunnellari orqali o'tadi. 'Routing Loop' (aylanma bloklanish) bo'lmaydi va mahalliy banking (Click/Payme) to'siqsiz ishlaydi.",
+                FontSize = 11,
+                Foreground = BrushFromHex("#94A3B8"),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 16,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            smartSp.Children.Add(smartDesc);
+            routeCardSmart.Child = smartSp;
+            sp.Children.Add(routeCardSmart);
+
+            // 2. Global Tunnel Card
+            routeCardGlobal = new Border
+            {
+                Background = BrushFromHex("#0F1322"),
                 BorderBrush = BrushFromHex("#1E253D"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(16),
-                Margin = new Thickness(0, 4, 0, 12)
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 12, 14, 12),
+                Margin = new Thickness(0, 0, 0, 14),
+                Cursor = Cursors.Hand
             };
-            StackPanel cSp = new StackPanel();
-            cSp.Children.Add(new TextBlock { Text = "Marshrutlash Qoidalari (Routing Mode)", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 12) });
-
-            rbRouteRule = new RadioButton
+            routeCardGlobal.MouseLeftButtonDown += (s, e) =>
             {
-                Content = "Smart Bypass (Tavsiya etiladi — Lokal LAN to'g'ridan-to'g'ri, Tashqi tarmoq VPN)",
-                Foreground = Brushes.White,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                IsChecked = (settings.Routing == "rule"),
-                Margin = new Thickness(0, 0, 0, 10)
+                settings.Routing = "global";
+                SaveData();
+                UpdateRoutingUI();
             };
-            rbRouteRule.Checked += (s, e) => { settings.Routing = "rule"; SaveData(); };
 
-            rbRouteGlobal = new RadioButton
+            StackPanel globSp = new StackPanel();
+            Grid globTop = new Grid();
+            globTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            globTop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel globTitleRow = new StackPanel { Orientation = Orientation.Horizontal };
+            globTitleRow.Children.Add(new TextBlock { Text = "🌐 ", FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            globTitleRow.Children.Add(new TextBlock { Text = "Global Tunnel (100% Proksi)", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
+            globTop.Children.Add(globTitleRow);
+
+            Border globBadge = new Border
             {
-                Content = "Global Tunnel (Barcha trafik 100% proksi server orqali)",
-                Foreground = Brushes.White,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                IsChecked = (settings.Routing == "global"),
-                Margin = new Thickness(0, 0, 0, 6)
+                Background = BrushFromHex("#3B1D54"),
+                BorderBrush = BrushFromHex("#A855F7"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8, 2, 8, 2)
             };
-            rbRouteGlobal.Checked += (s, e) => { settings.Routing = "global"; SaveData(); };
+            globBadge.Child = new TextBlock { Text = "TO'LIQ PROKSI", FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#D8B4FE") };
+            Grid.SetColumn(globBadge, 1);
+            globTop.Children.Add(globBadge);
+            globSp.Children.Add(globTop);
 
-            cSp.Children.Add(rbRouteRule);
-            cSp.Children.Add(rbRouteGlobal);
-            card.Child = cSp;
-            sp.Children.Add(card);
+            TextBlock globDesc = new TextBlock
+            {
+                Text = "Kompyuterdagi barcha dasturlar, brauzerlar va tizim internet trafigi istisnosiz 100% VLESS serveri orqali o'tkaziladi. IP manzilni butunlay yashirish kerak bo'lganda qo'llaniladi.",
+                FontSize = 11,
+                Foreground = BrushFromHex("#94A3B8"),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 16,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            globSp.Children.Add(globDesc);
+            routeCardGlobal.Child = globSp;
+            sp.Children.Add(routeCardGlobal);
 
+            // 3. Explanatory Educational Card
             Border infoCard = new Border
             {
                 Background = BrushFromHex("#101E2E"),
                 BorderBrush = BrushFromHex("#00F2FE"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(16)
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 12, 14, 12)
             };
             StackPanel iSp = new StackPanel();
-            iSp.Children.Add(new TextBlock { Text = "🛡️ Anti-Loop & Anti-Disconnect Arxitekturasi Faol", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#00F2FE"), Margin = new Thickness(0, 0, 0, 6) });
+            iSp.Children.Add(new TextBlock { Text = "💡 Marshrutlash (Routing) nima va nima uchun kerak?", FontSize = 12.5, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#00F2FE"), Margin = new Thickness(0, 0, 0, 6) });
             iSp.Children.Add(new TextBlock
             {
-                Text = "• Serverning haqiqiy IP manzili avtomatik ravishda Direct marshrutga qo'shiladi (Routing Loop bo'lmaydi).\n• MTU 1400 paketlar parchalanishining oldini oladi.\n• Cloudflare DoH (1.1.1.1) DNS oqib ketishini (DNS Leak) to'xtatadi.",
-                FontSize = 11.5,
+                Text = "Marshrutlash — internet trafigingiz qaysi yo'l bilan borishini boshqaruvchi qoidalar tizimidir.\n\n• Anti-Loop Himoyasi: sing-box ichida serveringizning haqiqiy IP manzili 'direct' qilib belgilanadi. Bu VPN ulanishining o'z-o'zini bloklab qo'yishining oldini oladi.\n• DoH DNS Himoyasi: Cloudflare 1.1.1.1 shifrlangan DNS orqali sayt so'rovlari oqib ketmaydi (DNS Leak yo'qoladi).\n• Tezlik va qulaylik: Mahalliy saytlar sekinlashmaydi, tashqi bloklangan resurslar esa oson ochiladi.",
+                FontSize = 11,
                 Foreground = BrushFromHex("#CBD5E1"),
                 TextWrapping = TextWrapping.Wrap,
-                LineHeight = 18
+                LineHeight = 16.5
             });
             infoCard.Child = iSp;
             sp.Children.Add(infoCard);
 
-            g.Children.Add(sp);
+            sv.Content = sp;
+            g.Children.Add(sv);
+            UpdateRoutingUI();
             return g;
+        }
+
+        private void UpdateRoutingUI()
+        {
+            if (routeCardSmart == null || routeCardGlobal == null) return;
+            bool isRule = (settings.Routing == "rule");
+            routeCardSmart.BorderBrush = BrushFromHex(isRule ? "#00F2FE" : "#1E253D");
+            routeCardSmart.Background = BrushFromHex(isRule ? "#121D38" : "#0F1322");
+            routeCardSmart.BorderThickness = new Thickness(isRule ? 1.5 : 1);
+
+            routeCardGlobal.BorderBrush = BrushFromHex(!isRule ? "#00F2FE" : "#1E253D");
+            routeCardGlobal.Background = BrushFromHex(!isRule ? "#121D38" : "#0F1322");
+            routeCardGlobal.BorderThickness = new Thickness(!isRule ? 1.5 : 1);
         }
 
         // ================= TAB 4: SETTINGS =================
         private Grid BuildSettingsTab()
         {
             Grid g = new Grid();
-            StackPanel sp = new StackPanel();
+            ScrollViewer sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            StackPanel sp = new StackPanel { Margin = new Thickness(0, 0, 4, 10) };
 
-            Border card = new Border
+            // Title
+            sp.Children.Add(new TextBlock
+            {
+                Text = "Dastur va Tarmoq Sozlamalari",
+                FontSize = 15,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 4, 0, 10)
+            });
+
+            // Card 1: Ulanish Rejimi (Traffic Mode)
+            Border modeCard = new Border
             {
                 Background = BrushFromHex("#111524"),
                 BorderBrush = BrushFromHex("#1E253D"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(16),
-                Margin = new Thickness(0, 4, 0, 12)
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 12, 14, 12),
+                Margin = new Thickness(0, 0, 0, 10)
             };
-            StackPanel cSp = new StackPanel();
-            cSp.Children.Add(new TextBlock { Text = "Ulanish va Tarmoq Sozlamalari", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 12) });
+            StackPanel modeSp = new StackPanel();
+            modeSp.Children.Add(new TextBlock { Text = "1. Ulanish Rejimi (Traffic Redirection)", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 8) });
 
-            chkTunMode = new CheckBox
+            // Mode Option A: System Proxy
+            modeCardProxy = new Border
             {
-                Content = "TUN Rejimi (WinTun Virtual VPN Adapter — Administrator talab qilinadi)",
-                Foreground = Brushes.White,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                IsChecked = (settings.Mode == "tun"),
-                Margin = new Thickness(0, 0, 0, 6)
+                Background = BrushFromHex("#121D38"),
+                BorderBrush = BrushFromHex("#00F2FE"),
+                BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12, 10, 12, 10),
+                Margin = new Thickness(0, 0, 0, 8),
+                Cursor = Cursors.Hand
             };
-            chkTunMode.Checked += (s, e) => { settings.Mode = "tun"; SaveData(); RefreshAllUI(); };
-            chkTunMode.Unchecked += (s, e) => { settings.Mode = "system_proxy"; SaveData(); RefreshAllUI(); };
-            cSp.Children.Add(chkTunMode);
-            cSp.Children.Add(new TextBlock { Text = "Agar belgi olib tashlansa, System Proxy (127.0.0.1:20807) rejimida Admin huquqisiz darhol ishlaydi.", FontSize = 10.5, Foreground = BrushFromHex("#94A3B8"), Margin = new Thickness(20, 0, 0, 12), TextWrapping = TextWrapping.Wrap });
+            modeCardProxy.MouseLeftButtonDown += (s, e) =>
+            {
+                settings.Mode = "system_proxy";
+                SaveData();
+                UpdateModeUI();
+                RefreshAllUI();
+            };
+            StackPanel prxSp = new StackPanel();
+            Grid prxTop = new Grid();
+            prxTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            prxTop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            prxTop.Children.Add(new TextBlock { Text = "⚡ System Proxy (127.0.0.1:20807)", FontSize = 12.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+            Border prxBadge = new Border { Background = BrushFromHex("#0F2942"), BorderBrush = BrushFromHex("#00F2FE"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 2, 6, 2) };
+            prxBadge.Child = new TextBlock { Text = "ADMINSIZ / TEZKOR", FontSize = 9, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#00F2FE") };
+            Grid.SetColumn(prxBadge, 1);
+            prxTop.Children.Add(prxBadge);
+            prxSp.Children.Add(prxTop);
+            prxSp.Children.Add(new TextBlock
+            {
+                Text = "Windows tizim proksisi orqali ulaydi. Brauzerlar, Telegram va asosiy ilovalar darhol ishlaydi. Administrator huquqini talab qilmaydi.",
+                FontSize = 10.5,
+                Foreground = BrushFromHex("#94A3B8"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+            modeCardProxy.Child = prxSp;
+            modeSp.Children.Add(modeCardProxy);
+
+            // Mode Option B: TUN Mode
+            modeCardTun = new Border
+            {
+                Background = BrushFromHex("#0F1322"),
+                BorderBrush = BrushFromHex("#1E253D"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12, 10, 12, 10),
+                Cursor = Cursors.Hand
+            };
+            modeCardTun.MouseLeftButtonDown += (s, e) =>
+            {
+                settings.Mode = "tun";
+                SaveData();
+                UpdateModeUI();
+                RefreshAllUI();
+            };
+            StackPanel tunSp = new StackPanel();
+            Grid tunTop = new Grid();
+            tunTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            tunTop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            tunTop.Children.Add(new TextBlock { Text = "🛡️ TUN Rejimi (WinTun Virtual VPN Adapter)", FontSize = 12.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+            Border tunBadge = new Border { Background = BrushFromHex("#3B1D54"), BorderBrush = BrushFromHex("#A855F7"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 2, 6, 2) };
+            tunBadge.Child = new TextBlock { Text = "TO'LIQ TIZIM / ADMIN", FontSize = 9, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#D8B4FE") };
+            Grid.SetColumn(tunBadge, 1);
+            tunTop.Children.Add(tunBadge);
+            tunSp.Children.Add(tunTop);
+            tunSp.Children.Add(new TextBlock
+            {
+                Text = "Tizim darajasidagi virtual tarmoq adapteri. Barcha o'yinlar, buyruqlar satri va proksini qo'llab-quvvatlamaydigan dasturlarni 100% qamrab oladi. (Administrator huquqi talab qilinadi).",
+                FontSize = 10.5,
+                Foreground = BrushFromHex("#94A3B8"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+            modeCardTun.Child = tunSp;
+            modeSp.Children.Add(modeCardTun);
+
+            modeCard.Child = modeSp;
+            sp.Children.Add(modeCard);
+
+            // Card 2: Barqarorlik va Tarmoq Himoyasi (Watchdog & MTU)
+            Border stabCard = new Border
+            {
+                Background = BrushFromHex("#111524"),
+                BorderBrush = BrushFromHex("#1E253D"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 12, 14, 12),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            StackPanel stabSp = new StackPanel();
+            stabSp.Children.Add(new TextBlock { Text = "2. Barqarorlik va Tarmoq Himoyasi", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 8) });
 
             chkWatchdog = new CheckBox
             {
@@ -806,18 +1047,26 @@ namespace ZedRay
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
                 IsChecked = settings.Watchdog,
-                Margin = new Thickness(0, 0, 0, 14)
+                Margin = new Thickness(0, 2, 0, 2)
             };
             chkWatchdog.Checked += (s, e) => { settings.Watchdog = true; SaveData(); };
             chkWatchdog.Unchecked += (s, e) => { settings.Watchdog = false; SaveData(); };
-            cSp.Children.Add(chkWatchdog);
+            stabSp.Children.Add(chkWatchdog);
+            stabSp.Children.Add(new TextBlock
+            {
+                Text = "Har 5 soniyada ulanish holatini tekshiradi. Agar internet uzilib-yonsa yoki server javob bermasa, 3 soniyada avtomatik qayta ulaydi.",
+                FontSize = 10.5,
+                Foreground = BrushFromHex("#94A3B8"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(22, 2, 0, 10)
+            });
 
-            StackPanel mtuRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            mtuRow.Children.Add(new TextBlock { Text = "Optimal MTU Hajmi:  ", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
-            cmbMtu = new ComboBox { Width = 180, FontSize = 12 };
+            StackPanel mtuRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
+            mtuRow.Children.Add(new TextBlock { Text = "Optimal MTU Hajmi: ", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
+            cmbMtu = new ComboBox { Width = 190, FontSize = 12, Margin = new Thickness(10, 0, 0, 0) };
             cmbMtu.Items.Add("1400 (Optimal - Tavsiya)");
-            cmbMtu.Items.Add("1280 (Sekin tarmoqlar)");
-            cmbMtu.Items.Add("1500 (Standart)");
+            cmbMtu.Items.Add("1280 (Sekin / Mobil tarmoq)");
+            cmbMtu.Items.Add("1500 (Standart Provayder)");
             cmbMtu.SelectedIndex = (settings.Mtu == 1280) ? 1 : (settings.Mtu == 1500 ? 2 : 0);
             cmbMtu.SelectionChanged += (s, e) =>
             {
@@ -827,24 +1076,33 @@ namespace ZedRay
                 SaveData();
             };
             mtuRow.Children.Add(cmbMtu);
-            cSp.Children.Add(mtuRow);
+            stabSp.Children.Add(mtuRow);
+            stabSp.Children.Add(new TextBlock
+            {
+                Text = "VLESS Reality TLS shifrlash qo'shimcha sarlavha qo'shadi. 1400 MTU paketlar maydalanib ketishining va ulanish uzilishining oldini oladi.",
+                FontSize = 10.5,
+                Foreground = BrushFromHex("#94A3B8"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0)
+            });
 
-            card.Child = cSp;
-            sp.Children.Add(card);
+            stabCard.Child = stabSp;
+            sp.Children.Add(stabCard);
 
+            // Card 3: Antivirus Istisnolari (Avast Alert)
             Border avCard = new Border
             {
                 Background = BrushFromHex("#231B12"),
                 BorderBrush = BrushFromHex("#F59E0B"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(14)
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 12, 14, 12)
             };
             StackPanel avSp = new StackPanel();
             avSp.Children.Add(new TextBlock { Text = "⚠️ Avast / Antivirus bo'yicha muhim eslatma", FontSize = 12.5, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#FBBF24"), Margin = new Thickness(0, 0, 0, 4) });
             avSp.Children.Add(new TextBlock
             {
-                Text = "Kompyuteringizda Avast o'rnatilgan. Agar Avast'ning 'HTTPS Scanning / Web Shield' funksiyasi VLESS Reality paketlarini tekshirsa, aloqa uzilib qolishi mumkin. Avast sozlamalaridan ushbu papkani Exclusions (Istisnolar) ro'yxatiga qo'shing.",
+                Text = "Kompyuteringizda Avast o'rnatilgan. Agar Avast'ning 'HTTPS Scanning / Web Shield' funksiyasi VLESS Reality paketlarini tekshirsa, aloqa soxtalashtirilgan deb hisoblanib uzilib qolishi mumkin.\n\nTavsiya: Avast sozlamalaridan ushbu ZedRay papkasini Exclusions (Istisnolar) ro'yxatiga qo'shing.",
                 FontSize = 11,
                 Foreground = BrushFromHex("#FDE68A"),
                 TextWrapping = TextWrapping.Wrap,
@@ -853,8 +1111,23 @@ namespace ZedRay
             avCard.Child = avSp;
             sp.Children.Add(avCard);
 
-            g.Children.Add(sp);
+            sv.Content = sp;
+            g.Children.Add(sv);
+            UpdateModeUI();
             return g;
+        }
+
+        private void UpdateModeUI()
+        {
+            if (modeCardProxy == null || modeCardTun == null) return;
+            bool isTun = (settings.Mode == "tun");
+            modeCardProxy.BorderBrush = BrushFromHex(!isTun ? "#00F2FE" : "#1E253D");
+            modeCardProxy.Background = BrushFromHex(!isTun ? "#121D38" : "#0F1322");
+            modeCardProxy.BorderThickness = new Thickness(!isTun ? 1.5 : 1);
+
+            modeCardTun.BorderBrush = BrushFromHex(isTun ? "#00F2FE" : "#1E253D");
+            modeCardTun.Background = BrushFromHex(isTun ? "#121D38" : "#0F1322");
+            modeCardTun.BorderThickness = new Thickness(isTun ? 1.5 : 1);
         }
 
         // ================= MODAL OVERLAY (ADD SERVER / SUB) =================
@@ -1066,6 +1339,8 @@ namespace ZedRay
             RenderServerList();
             UpdateActiveServerPreview();
             UpdateConnectionVisuals();
+            UpdateRoutingUI();
+            UpdateModeUI();
         }
 
         private void RenderServerList()
@@ -1649,15 +1924,42 @@ namespace ZedRay
             catch { return null; }
         }
 
+        private void StartSyncSpin()
+        {
+            if (syncRotateTransform == null) return;
+            Dispatcher.Invoke(() =>
+            {
+                DoubleAnimation da = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 360,
+                    Duration = new Duration(TimeSpan.FromSeconds(0.85)),
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                syncRotateTransform.BeginAnimation(RotateTransform.AngleProperty, da);
+            });
+        }
+
+        private void StopSyncSpin()
+        {
+            if (syncRotateTransform == null) return;
+            Dispatcher.Invoke(() =>
+            {
+                syncRotateTransform.BeginAnimation(RotateTransform.AngleProperty, null);
+                syncRotateTransform.Angle = 0;
+            });
+        }
+
         private async Task SyncSubscriptionAsync()
         {
-            if (string.IsNullOrEmpty(settings.SubUrl))
-            {
-                await PingAllServersAsync();
-                return;
-            }
+            StartSyncSpin();
             try
             {
+                if (string.IsNullOrEmpty(settings.SubUrl))
+                {
+                    await PingAllServersAsync();
+                    return;
+                }
                 string userInfo = null;
                 string url = settings.SubUrl;
                 string raw = await Task.Run(() =>
@@ -1724,6 +2026,10 @@ namespace ZedRay
             catch (Exception ex)
             {
                 MessageBox.Show("Obunani yangilashda xatolik: " + ex.Message, "ZedRay", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                StopSyncSpin();
             }
         }
 
