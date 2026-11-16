@@ -1559,11 +1559,28 @@ namespace ZedRay
                         WorkingDirectory = binDir,
                         CreateNoWindow = true,
                         UseShellExecute = false,
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true,
                         WindowStyle = ProcessWindowStyle.Hidden
                     };
 
+                    StringBuilder coreLog = new StringBuilder();
                     singboxProcess = Process.Start(psi);
-                    System.Threading.Thread.Sleep(600);
+                    singboxProcess.ErrorDataReceived += (s2, e2) => { if (e2.Data != null) lock (coreLog) coreLog.AppendLine(e2.Data); };
+                    singboxProcess.OutputDataReceived += (s2, e2) => { };
+                    singboxProcess.BeginErrorReadLine();
+                    singboxProcess.BeginOutputReadLine();
+                    System.Threading.Thread.Sleep(1500);
+
+                    // If the core died right after start (bad config, missing wintun.dll, no admin rights...)
+                    // report the real reason instead of showing a fake "connected" state.
+                    if (singboxProcess.HasExited)
+                    {
+                        string reason;
+                        lock (coreLog) reason = coreLog.ToString().Trim();
+                        singboxProcess = null;
+                        throw new Exception("sing-box ishga tushmadi." + (reason.Length > 0 ? "\n\n" + reason : "\n\nTUN rejimi uchun dasturni Administrator sifatida ishga tushiring."));
+                    }
 
                     if (settings.Mode == "system_proxy")
                     {
@@ -1608,6 +1625,17 @@ namespace ZedRay
                 }
             }
             catch { }
+
+            // Also clean up orphaned cores left over from a crashed session; they keep
+            // port 20807 / the TUN adapter busy and make the next start fail.
+            try
+            {
+                foreach (Process p in Process.GetProcessesByName("sing-box"))
+                {
+                    try { p.Kill(); p.WaitForExit(2000); } catch { }
+                }
+            }
+            catch { }
         }
 
         private void SetWindowsSystemProxy(bool enable, string proxyAddr)
@@ -1642,17 +1670,17 @@ namespace ZedRay
             sb.AppendLine("  \"log\": { \"level\": \"warn\" },");
             sb.AppendLine("  \"dns\": {");
             sb.AppendLine("    \"servers\": [");
-            sb.AppendLine("      { \"tag\": \"dns-remote\", \"address\": \"https://1.1.1.1/dns-query\", \"detour\": \"proxy\" },");
-            sb.AppendLine("      { \"tag\": \"dns-direct\", \"address\": \"local\", \"detour\": \"direct\" }");
+            sb.AppendLine("      { \"type\": \"https\", \"tag\": \"dns-remote\", \"server\": \"1.1.1.1\", \"detour\": \"proxy\" },");
+            sb.AppendLine("      { \"type\": \"local\", \"tag\": \"dns-direct\" }");
             sb.AppendLine("    ],");
-            sb.AppendLine("    \"rules\": [ { \"outbound\": \"any\", \"server\": \"dns-direct\" } ],");
+            sb.AppendLine("    \"final\": \"dns-remote\",");
             sb.AppendLine("    \"strategy\": \"ipv4_only\"");
             sb.AppendLine("  },");
             sb.AppendLine("  \"inbounds\": [");
             sb.AppendLine("    { \"type\": \"mixed\", \"tag\": \"mixed-in\", \"listen\": \"127.0.0.1\", \"listen_port\": 20807 }" + (settings.Mode == "tun" ? "," : ""));
             if (settings.Mode == "tun")
             {
-                sb.AppendLine("    { \"type\": \"tun\", \"tag\": \"tun-in\", \"interface_name\": \"ZedRayTun\", \"inet4_address\": \"172.19.0.1/30\", \"mtu\": " + settings.Mtu + ", \"auto_route\": true, \"strict_route\": true, \"stack\": \"gvisor\", \"sniff\": true }");
+                sb.AppendLine("    { \"type\": \"tun\", \"tag\": \"tun-in\", \"interface_name\": \"ZedRayTun\", \"address\": [ \"172.19.0.1/30\" ], \"mtu\": " + settings.Mtu + ", \"auto_route\": true, \"strict_route\": true, \"stack\": \"gvisor\" }");
             }
             sb.AppendLine("  ],");
             sb.AppendLine("  \"outbounds\": [");
@@ -1672,16 +1700,18 @@ namespace ZedRay
             sb.AppendLine("        \"reality\": { \"enabled\": true, \"public_key\": \"" + EscapeJson(srv.PublicKey) + "\", \"short_id\": \"" + EscapeJson(srv.ShortId) + "\" }");
             sb.AppendLine("      }");
             sb.AppendLine("    },");
-            sb.AppendLine("    { \"type\": \"direct\", \"tag\": \"direct\" },");
-            sb.AppendLine("    { \"type\": \"dns\", \"tag\": \"dns-out\" }");
+            sb.AppendLine("    { \"type\": \"direct\", \"tag\": \"direct\" }");
             sb.AppendLine("  ],");
             sb.AppendLine("  \"route\": {");
             sb.AppendLine("    \"rules\": [");
-            sb.AppendLine("      { \"protocol\": \"dns\", \"outbound\": \"dns-out\" },");
-            sb.AppendLine("      { \"ip_cidr\": [ \"" + resolvedIp + "/32\" ], \"outbound\": \"direct\" },");
-            sb.AppendLine("      { \"ip_is_private\": true, \"outbound\": \"direct\" }");
+            sb.AppendLine("      { \"action\": \"sniff\" },");
+            sb.AppendLine("      { \"protocol\": \"dns\", \"action\": \"hijack-dns\" },");
+            sb.AppendLine("      { \"ip_cidr\": [ \"" + resolvedIp + "/32\" ], \"action\": \"route\", \"outbound\": \"direct\" }" + (settings.Routing == "rule" ? "," : ""));
+            if (settings.Routing == "rule")
+                sb.AppendLine("      { \"ip_is_private\": true, \"action\": \"route\", \"outbound\": \"direct\" }");
             sb.AppendLine("    ],");
             sb.AppendLine("    \"auto_detect_interface\": true,");
+            sb.AppendLine("    \"default_domain_resolver\": \"dns-direct\",");
             sb.AppendLine("    \"final\": \"proxy\"");
             sb.AppendLine("  }");
             sb.AppendLine("}");
@@ -1767,7 +1797,16 @@ namespace ZedRay
             watchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
             watchdogTimer.Tick += async (s, e) =>
             {
-                if (!isConnected || !settings.Watchdog || activeServer == null) return;
+                if (!isConnected || isConnecting || !settings.Watchdog || activeServer == null) return;
+
+                // sing-box process crashed -> restart immediately
+                if (singboxProcess == null || singboxProcess.HasExited)
+                {
+                    watchdogFails = 0;
+                    ConnectVpn();
+                    return;
+                }
+
                 int ping = await TestTcpPingAsync(activeServer.Host, activeServer.Port, 2500);
                 if (ping <= 0)
                 {
