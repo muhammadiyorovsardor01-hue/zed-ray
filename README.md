@@ -1,4 +1,4 @@
-# 🛡️ Zed Secure VPN Client (Windows)
+# 🛡️ ZedRay VPN Client (Windows)
 
 > **Sing-box 1.14.4** yadrosi va rasmiy **WinTun** virtual tarmoq drayveri asosida Windows uchun maxsus ishlab chiqilgan, uzilishlarsiz ishlovchi ultra-barqaror VPN & Proxy mijozi.
 

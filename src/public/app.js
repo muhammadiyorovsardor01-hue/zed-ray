@@ -98,7 +98,7 @@ navItems.forEach(item => {
       searchContainer.style.display = 'flex';
       chipsRow.style.display = 'flex';
     } else if (targetTab === 'viewHome') {
-      pageTitle.textContent = 'Zed Secure';
+      pageTitle.textContent = 'ZedRay';
       searchContainer.style.display = 'none';
       chipsRow.style.display = 'none';
     } else if (targetTab === 'viewRouting') {

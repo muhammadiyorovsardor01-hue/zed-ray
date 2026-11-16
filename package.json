@@ -1,7 +1,7 @@
 {
-  "name": "zed-vpn-desktop",
+  "name": "zed-ray",
   "version": "1.0.0",
-  "description": "High-performance, secure Windows VPN & Proxy client based on Sing-box core with TUN mode, VLESS Reality, and anti-disconnect watchdog.",
+  "description": "ZedRay - High-performance, secure Windows VPN & Proxy client based on Sing-box core with TUN mode, VLESS Reality, and anti-disconnect watchdog.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -9,13 +9,13 @@
   },
   "keywords": [
     "vpn",
+    "zedray",
     "vless",
     "reality",
     "sing-box",
     "wintun",
     "proxy",
-    "windows",
-    "hiddify-alternative"
+    "windows"
   ],
   "author": "Antigravity & User",
   "license": "MIT"
