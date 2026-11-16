@@ -1,0 +1,32 @@
+# ==========================================
+# GitHub Security & Zero-Leakage Policy
+# ==========================================
+
+# Personal Proxy & VPN Configurations (NEVER COMMIT)
+data/servers.json
+data/runtime_config.json
+data/settings.json
+data/*.json
+!data/.gitkeep
+
+# Environment variables & secrets
+.env
+.env.*
+*.secret
+*.pem
+*.key
+
+# Binaries and Drivers (Kept out of Git history)
+bin/*.exe
+bin/*.dll
+!bin/.gitkeep
+
+# Logs & Runtime cache
+logs/
+*.log
+npm-debug.log*
+
+# Node modules & OS artifacts
+node_modules/
+.DS_Store
+Thumbs.db

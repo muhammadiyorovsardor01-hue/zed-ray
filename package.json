@@ -1,0 +1,22 @@
+{
+  "name": "zed-vpn-desktop",
+  "version": "1.0.0",
+  "description": "High-performance, secure Windows VPN & Proxy client based on Sing-box core with TUN mode, VLESS Reality, and anti-disconnect watchdog.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "app": "node launch.js"
+  },
+  "keywords": [
+    "vpn",
+    "vless",
+    "reality",
+    "sing-box",
+    "wintun",
+    "proxy",
+    "windows",
+    "hiddify-alternative"
+  ],
+  "author": "Antigravity & User",
+  "license": "MIT"
+}

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zed Secure VPN</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- TOP APP BAR -->
+    <header class="app-header">
+      <div class="header-top">
+        <h1 class="header-title" id="pageTitle">Servers</h1>
+        <div class="header-actions">
+          <button class="icon-btn" id="pingAllBtn" title="Test all latencies">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="menuBtn" title="More options">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+            </svg>
+          </button>
+          <button class="add-btn-flower" id="openAddModalBtn" title="Add Server / Subscription">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- SEARCH BAR (Visible on Servers tab) -->
+      <div class="search-container" id="searchContainer">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="searchInput" placeholder="Search servers" autocomplete="off" />
+      </div>
+
+      <!-- FILTER CHIPS -->
+      <div class="chips-row" id="chipsRow">
+        <button class="chip active" data-filter="all">All <span id="chipAllCount">4</span></button>
+        <button class="chip" data-filter="manual">Manual <span id="chipManualCount">0</span></button>
+        <button class="chip" data-filter="subscriptions">Subscriptions</button>
+        <button class="chip" data-filter="reality">VLESS Reality</button>
+      </div>
+    </header>
+
+    <!-- CONTENT TABS -->
+    <main class="content-area">
+
+      <!-- ================= 1. SERVERS VIEW (SCREENSHOT REPLICA) ================= -->
+      <section class="tab-view active" id="viewServers">
+        
+        <!-- SUBSCRIPTION CARD (MultiCo VPN style) -->
+        <div class="card-subscription" id="subscriptionCard">
+          <div class="sub-header">
+            <div>
+              <div class="sub-title" id="subName">MultiCo VPN</div>
+              <div class="sub-info" id="subServerInfo">5 servers · updated 4 min ago</div>
+            </div>
+            <button class="btn-sub-refresh" id="subRefreshBtn" title="Sync subscription">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="sub-progress-bar">
+            <div class="sub-progress-fill" id="subProgressFill" style="width: 2%;"></div>
+          </div>
+
+          <div class="sub-stats">
+            <span id="subUsageText">65.86 GB of 10240.00 GB used</span>
+            <span id="subDaysLeft">348 days left</span>
+          </div>
+
+          <button class="btn-sub-pill" id="openSubManagerBtn">Subscriptions</button>
+        </div>
+
+        <!-- AUTO-SELECT FASTEST SERVER CARD -->
+        <div class="card-auto-select" id="cardAutoSelect">
+          <div class="auto-select-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#a855f7" stroke="#a855f7" stroke-width="1.5">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+          </div>
+          <div class="auto-select-content">
+            <div class="auto-select-title">Auto · MultiCo VPN</div>
+            <div class="auto-select-desc">Fastest of all servers. If one fails, connections move on in a moment.</div>
+          </div>
+          <button class="info-btn" title="Auto routing info">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- SERVER LIST -->
+        <div class="servers-list" id="serversList">
+          <!-- Dynamic server cards populated by app.js -->
+        </div>
+      </section>
+
+      <!-- ================= 2. HOME VIEW (DASHBOARD & CONNECT) ================= -->
+      <section class="tab-view" id="viewHome">
+        <div class="home-container">
+          <div class="status-badge" id="homeStatusBadge">
+            <span class="status-dot"></span>
+            <span id="homeStatusText">DISCONNECTED</span>
+          </div>
+
+          <!-- BIG POWER BUTTON -->
+          <div class="power-button-wrapper">
+            <button class="power-button" id="mainConnectBtn">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                <line x1="12" y1="2" x2="12" y2="12"></line>
+              </svg>
+            </button>
+            <div class="pulse-ring"></div>
+          </div>
+
+          <div class="connection-timer" id="connectionTimer">00:00:00</div>
+
+          <!-- ACTIVE SERVER DISPLAY -->
+          <div class="active-server-card" id="homeActiveServerCard">
+            <span class="flag-icon" id="homeActiveFlag">🇭🇰</span>
+            <div class="active-server-details">
+              <div class="active-name" id="homeActiveName">Hong Kong • Turbo 5G</div>
+              <div class="active-meta" id="homeActiveMeta">VLESS · TCP / REALITY · 64 ms</div>
+            </div>
+            <button class="switch-server-btn" id="homeSwitchBtn">Change</button>
+          </div>
+
+          <!-- NETWORK METRICS -->
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-label">MODE</div>
+              <div class="metric-val" id="metricMode">TUN (VPN)</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">MTU</div>
+              <div class="metric-val">1400 (Stable)</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">WATCHDOG</div>
+              <div class="metric-val text-green">ACTIVE</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 3. ROUTING VIEW ================= -->
+      <section class="tab-view" id="viewRouting">
+        <div class="settings-card">
+          <h2 class="section-title">Marshrutlash Qoidalari (Routing)</h2>
+          <div class="radio-option">
+            <input type="radio" name="routingMode" id="routeRule" value="rule" checked />
+            <label for="routeRule">
+              <div class="option-title">Rule (Tavsiya etiladi)</div>
+              <div class="option-desc">Lokal tarmoq (LAN/192.168.x.x) va mahalliy saytlar to'g'ridan-to'g'ri, qolgani VPN orqali o'tadi.</div>
+            </label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="routingMode" id="routeGlobal" value="global" />
+            <label for="routeGlobal">
+              <div class="option-title">Global Proxy</div>
+              <div class="option-desc">Barcha internet trafigi to'liq proksi server orqali yo'naltiriladi.</div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 4. SETTINGS VIEW ================= -->
+      <section class="tab-view" id="viewSettings">
+        
+        <!-- ANTI-DISCONNECT ADVICE BANNER -->
+        <div class="alert-banner">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div class="alert-text">
+            <strong>Uzilishlarning oldini olish (Avast/Antivirus):</strong><br>
+            Agar kompyuteringizda Avast yoki 3-tomon antivirus bo'lsa, ulardagi "Web Shield / HTTPS Scanning" Reality TLS so'rovlarini uzib qo'yishi mumkin. Ilovani antivirus istisnolari (Exclusions)ga qo'shing.
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2 class="section-title">Ulanish sozlamalari</h2>
+          
+          <div class="setting-item">
+            <div>
+              <div class="item-title">TUN Rejimi (To'liq VPN)</div>
+              <div class="item-desc">WinTun drayveri orqali barcha tizim trafigini shifrlab uzatadi.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settingTunMode" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div>
+              <div class="item-title">Auto-Reconnect Watchdog</div>
+              <div class="item-desc">Notebook uyqudan ochilganda yoki aloqa uzilganda avtomatik qayta ulaydi.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settingWatchdog" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div>
+              <div class="item-title">MTU Sozlamasi</div>
+              <div class="item-desc">Paketlar bo'linib uzilishining oldini oluvchi optimal hajm.</div>
+            </div>
+            <select class="custom-select" id="settingMtu">
+              <option value="1400" selected>1400 (Optimal - Tavsiya etiladi)</option>
+              <option value="1280">1280 (Xavfsiz/Sekin tarmoqlar uchun)</option>
+              <option value="1500">1500 (Standart)</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <div>
+              <div class="item-title">Xavfsiz DNS Provayderi</div>
+              <div class="item-desc">DNS oqib ketishi (leak) ning oldini oladi.</div>
+            </div>
+            <select class="custom-select" id="settingDns">
+              <option value="cloudflare" selected>Cloudflare DoH (1.1.1.1)</option>
+              <option value="google">Google DoH (8.8.8.8)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2 class="section-title">Dastur haqida</h2>
+          <div class="about-row">
+            <span>Dastur versiyasi:</span>
+            <span class="text-muted">v1.0.0 (Sing-Box 1.14.4)</span>
+          </div>
+          <div class="about-row">
+            <span>Yadro (Core):</span>
+            <span class="text-green">SagerNet sing-box + WinTun</span>
+          </div>
+          <div class="about-row">
+            <span>Litsenziya & Xavfsizlik:</span>
+            <span class="text-muted">Open Source (GitHub Ready)</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FLOATING PILL NAVIGATION BAR -->
+    <nav class="nav-pill-container">
+      <div class="nav-pill">
+        <button class="nav-item" data-tab="viewHome">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </button>
+        <button class="nav-item active" data-tab="viewServers">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          <span class="nav-label">Servers</span>
+        </button>
+        <button class="nav-item" data-tab="viewRouting">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+        </button>
+        <button class="nav-item" data-tab="viewSettings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <!-- MODAL: ADD SERVER OR SUBSCRIPTION -->
+    <div class="modal-overlay" id="addModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 class="modal-title">Server yoki Obuna qo'shish</h3>
+          <button class="modal-close-btn" id="closeAddModalBtn">&times;</button>
+        </div>
+        
+        <div class="modal-tabs">
+          <button class="modal-tab active" id="tabAddLink">VLESS Link</button>
+          <button class="modal-tab" id="tabAddSub">Obuna (Subscription)</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Add Link Form -->
+          <div class="modal-pane active" id="paneAddLink">
+            <label class="input-label">VLESS / Reality Havolasi:</label>
+            <textarea class="custom-textarea" id="vlessLinkInput" placeholder="vless://uuid@host:443?security=reality&sni=yahoo.com&pbk=...#MyServer"></textarea>
+            <button class="btn-primary" id="saveLinkBtn">Qo'shish va Saqlash</button>
+          </div>
+
+          <!-- Add Subscription Form -->
+          <div class="modal-pane" id="paneAddSub">
+            <label class="input-label">Obuna nomi:</label>
+            <input type="text" class="custom-input" id="subNameInput" placeholder="Masalan: MultiCo VPN" />
+            
+            <label class="input-label" style="margin-top: 12px;">Obuna URL havolasi:</label>
+            <input type="text" class="custom-input" id="subUrlInput" placeholder="https://my-vpn-sub.com/api/v1/..." />
+            
+            <button class="btn-primary" id="saveSubBtn" style="margin-top: 16px;">Yangilash va Sinxronlash</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
