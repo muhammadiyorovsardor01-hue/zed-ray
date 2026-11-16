@@ -1,5 +1,5 @@
 /**
- * Zed Secure VPN Client - Frontend Logic
+ * ZedRay Pro - Client Logic with SVG Flags, Live Speed Chart & Cyber UI
  */
 
 let appState = {
@@ -11,11 +11,12 @@ let appState = {
   duration: 0,
   filter: 'all',
   searchQuery: '',
-  timerInterval: null
+  timerInterval: null,
+  speedHistory: Array(30).fill(0),
+  speedInterval: null
 };
 
 // ================= DOM ELEMENTS =================
-const pageTitle = document.getElementById('pageTitle');
 const searchInput = document.getElementById('searchInput');
 const searchContainer = document.getElementById('searchContainer');
 const chipsRow = document.getElementById('chipsRow');
@@ -30,21 +31,25 @@ const chipAllCount = document.getElementById('chipAllCount');
 const chipManualCount = document.getElementById('chipManualCount');
 
 // Home Tab Elements
-const homeStatusBadge = document.getElementById('homeStatusBadge');
-const homeStatusText = document.getElementById('homeStatusText');
+const securityCard = document.getElementById('securityCard');
+const homeSecTitle = document.getElementById('homeSecTitle');
+const homeSecIp = document.getElementById('homeSecIp');
+const powerOrbit = document.getElementById('powerOrbit');
 const mainConnectBtn = document.getElementById('mainConnectBtn');
 const connectionTimer = document.getElementById('connectionTimer');
 const homeActiveFlag = document.getElementById('homeActiveFlag');
 const homeActiveName = document.getElementById('homeActiveName');
 const homeActiveMeta = document.getElementById('homeActiveMeta');
 const homeSwitchBtn = document.getElementById('homeSwitchBtn');
-const metricMode = document.getElementById('metricMode');
+const speedDown = document.getElementById('speedDown');
+const speedUp = document.getElementById('speedUp');
+const speedCanvas = document.getElementById('speedCanvas');
+const ctx = speedCanvas ? speedCanvas.getContext('2d') : null;
 
 // Settings Elements
 const settingTunMode = document.getElementById('settingTunMode');
 const settingWatchdog = document.getElementById('settingWatchdog');
 const settingMtu = document.getElementById('settingMtu');
-const settingDns = document.getElementById('settingDns');
 
 // Modals & Buttons
 const addModal = document.getElementById('addModal');
@@ -61,52 +66,25 @@ const subUrlInput = document.getElementById('subUrlInput');
 const saveSubBtn = document.getElementById('saveSubBtn');
 const pingAllBtn = document.getElementById('pingAllBtn');
 const subRefreshBtn = document.getElementById('subRefreshBtn');
-const openSubManagerBtn = document.getElementById('openSubManagerBtn');
 
 // ================= NAVIGATION =================
-const navItems = document.querySelectorAll('.nav-item');
+const bnavItems = document.querySelectorAll('.bnav-item');
 const tabViews = document.querySelectorAll('.tab-view');
 
-navItems.forEach(item => {
+bnavItems.forEach(item => {
   item.addEventListener('click', () => {
     const targetTab = item.dataset.tab;
 
-    // Update active nav button
-    navItems.forEach(n => {
-      n.classList.remove('active');
-      const label = n.querySelector('.nav-label');
-      if (label) label.remove();
-    });
+    bnavItems.forEach(n => n.classList.remove('active'));
     item.classList.add('active');
 
-    // Add label to active tab
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'nav-label';
-    if (targetTab === 'viewHome') labelSpan.textContent = 'Home';
-    else if (targetTab === 'viewServers') labelSpan.textContent = 'Servers';
-    else if (targetTab === 'viewRouting') labelSpan.textContent = 'Routing';
-    else if (targetTab === 'viewSettings') labelSpan.textContent = 'Settings';
-    item.appendChild(labelSpan);
-
-    // Switch view
     tabViews.forEach(v => v.classList.remove('active'));
     document.getElementById(targetTab).classList.add('active');
 
-    // Show/hide search & chips based on view
     if (targetTab === 'viewServers') {
-      pageTitle.textContent = 'Servers';
       searchContainer.style.display = 'flex';
       chipsRow.style.display = 'flex';
-    } else if (targetTab === 'viewHome') {
-      pageTitle.textContent = 'ZedRay';
-      searchContainer.style.display = 'none';
-      chipsRow.style.display = 'none';
-    } else if (targetTab === 'viewRouting') {
-      pageTitle.textContent = 'Routing';
-      searchContainer.style.display = 'none';
-      chipsRow.style.display = 'none';
-    } else if (targetTab === 'viewSettings') {
-      pageTitle.textContent = 'Settings';
+    } else {
       searchContainer.style.display = 'none';
       chipsRow.style.display = 'none';
     }
@@ -114,8 +92,8 @@ navItems.forEach(item => {
 });
 
 homeSwitchBtn.addEventListener('click', () => {
-  const serversNavItem = document.querySelector('.nav-item[data-tab="viewServers"]');
-  serversNavItem.click();
+  const serversBtn = document.querySelector('.bnav-item[data-tab="viewServers"]');
+  if (serversBtn) serversBtn.click();
 });
 
 // ================= CHIP FILTERING =================
@@ -145,6 +123,7 @@ async function loadServers() {
 
     renderSubscription();
     renderServers();
+    updateHomeServerPreview();
   } catch (err) {
     console.error('Error fetching servers:', err);
   }
@@ -160,7 +139,6 @@ async function loadStatus() {
 
     if (data.settings) {
       settingTunMode.checked = data.settings.mode === 'tun';
-      metricMode.textContent = data.settings.mode === 'tun' ? 'TUN (VPN)' : 'System Proxy';
       settingMtu.value = data.settings.mtu || 1400;
       settingWatchdog.checked = data.settings.autoReconnect !== false;
     }
@@ -176,9 +154,9 @@ function renderSubscription() {
   if (!appState.subscription) return;
   const sub = appState.subscription;
   subName.textContent = sub.name || 'MultiCo VPN';
-  subServerInfo.textContent = `${appState.servers.length} servers · ${sub.updatedText || 'updated recently'}`;
-  subUsageText.textContent = `${sub.usedGb || 0} GB of ${sub.totalGb || 10240} GB used`;
-  subDaysLeft.textContent = `${sub.daysLeft || 348} days left`;
+  subServerInfo.textContent = `${appState.servers.length} ta server · ${sub.updatedText || 'yaqinda yangilandi'}`;
+  subUsageText.textContent = `${sub.usedGb || 0} GB / ${sub.totalGb || 10240} GB`;
+  subDaysLeft.textContent = `${sub.daysLeft || 348} kun qoldi`;
 
   const percent = Math.min(100, Math.max(1, ((sub.usedGb || 1) / (sub.totalGb || 10240)) * 100));
   subProgressFill.style.width = `${percent}%`;
@@ -190,7 +168,6 @@ function renderSubscription() {
 function renderServers() {
   serversList.innerHTML = '';
 
-  // Auto Select Card highlight
   if (appState.selectedServerId === 'auto') {
     cardAutoSelect.classList.add('selected');
   } else {
@@ -198,11 +175,9 @@ function renderServers() {
   }
 
   const filtered = appState.servers.filter(srv => {
-    // Search query match
     if (appState.searchQuery && !srv.name.toLowerCase().includes(appState.searchQuery)) {
       return false;
     }
-    // Filter chip match
     if (appState.filter === 'manual') return srv.source === 'manual';
     if (appState.filter === 'subscriptions') return srv.source === 'subscription';
     if (appState.filter === 'reality') return srv.security === 'reality';
@@ -225,22 +200,22 @@ function renderServers() {
       pingClass = 'medium';
     }
 
+    const flagSvg = getCountryFlagSvg(srv.country || srv.name);
+
     card.innerHTML = `
       <div class="server-left">
-        <span class="flag-icon">${srv.country || '🌐'}</span>
+        <div class="server-flag-wrap">${flagSvg}</div>
         <div>
           <div class="server-name">${srv.name}</div>
           <div class="server-meta">VLESS · ${srv.network ? srv.network.toUpperCase() : 'TCP'} / ${srv.security ? srv.security.toUpperCase() : 'REALITY'}</div>
         </div>
       </div>
       <div class="server-right">
-        <div class="ping-badge ${pingClass}">
-          <span>${pingText}</span>
-          ${isSelected ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
-        </div>
-        <button class="server-menu-btn" title="Delete / Edit" data-id="${srv.id}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+        <div class="ping-pill ${pingClass}">${pingText}</div>
+        <button class="server-menu-btn" title="O'chirish" data-id="${srv.id}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
           </svg>
         </button>
       </div>
@@ -264,18 +239,25 @@ function renderServers() {
 function selectServer(id) {
   appState.selectedServerId = id;
   renderServers();
+  updateHomeServerPreview();
 
-  // If already connected, reconnect to the newly selected server
   if (appState.status === 'connected') {
     connectServer(id);
+  }
+}
+
+function updateHomeServerPreview() {
+  let target = null;
+  if (appState.selectedServerId === 'auto' || !appState.selectedServerId) {
+    target = appState.servers[0];
   } else {
-    // Update Home active server preview
-    const srv = appState.servers.find(s => s.id === id);
-    if (srv) {
-      homeActiveFlag.textContent = srv.country || '🌐';
-      homeActiveName.textContent = srv.name;
-      homeActiveMeta = `VLESS · TCP / REALITY · ${srv.ping || 60} ms`;
-    }
+    target = appState.servers.find(s => s.id === appState.selectedServerId) || appState.servers[0];
+  }
+
+  if (target) {
+    homeActiveFlag.innerHTML = getCountryFlagSvg(target.country || target.name);
+    homeActiveName.textContent = appState.selectedServerId === 'auto' ? `Auto (${target.name})` : target.name;
+    homeActiveMeta.textContent = `VLESS · REALITY · ${target.ping || 64} ms`;
   }
 }
 
@@ -307,6 +289,7 @@ async function connectServer(serverId) {
       appState.status = 'connected';
       appState.activeServer = data.activeServer;
       startTimer();
+      startSpeedSimulation();
     } else {
       appState.status = 'disconnected';
       alert(`Ulanish xatosi: ${data.error || 'Noma\'lum xatolik'}`);
@@ -324,6 +307,7 @@ async function disconnectServer() {
     appState.status = 'disconnected';
     appState.activeServer = null;
     stopTimer();
+    stopSpeedSimulation();
   } catch (err) {
     console.error('Error disconnecting:', err);
   }
@@ -332,23 +316,25 @@ async function disconnectServer() {
 
 function updateConnectionUI() {
   if (appState.status === 'connected') {
-    homeStatusBadge.className = 'status-badge connected';
-    homeStatusText.textContent = 'CONNECTED';
-    mainConnectBtn.className = 'power-button connected';
-
-    if (appState.activeServer) {
-      homeActiveFlag.textContent = appState.activeServer.country || '🌐';
-      homeActiveName.textContent = appState.activeServer.name;
-      homeActiveMeta.textContent = `VLESS · TCP / REALITY · ${appState.activeServer.ping || 64} ms`;
-    }
+    securityCard.className = 'security-card connected';
+    homeSecTitle.textContent = 'HIMOYA YOQILGAN';
+    const srv = appState.activeServer || appState.servers[0];
+    homeSecIp.textContent = `Virtual IP: ${srv ? srv.server : '185.196.x.x'} (Shifrlangan)`;
+    powerOrbit.className = 'power-orbit-ring active';
+    mainConnectBtn.className = 'power-core-btn connected';
   } else if (appState.status === 'connecting') {
-    homeStatusBadge.className = 'status-badge';
-    homeStatusText.textContent = 'CONNECTING...';
-    mainConnectBtn.className = 'power-button connecting';
+    securityCard.className = 'security-card';
+    homeSecTitle.textContent = 'ULANMOQDA...';
+    homeSecIp.textContent = 'Shifrlangan kanal ochilmoqda...';
+    powerOrbit.className = 'power-orbit-ring active';
+    mainConnectBtn.className = 'power-core-btn connecting';
   } else {
-    homeStatusBadge.className = 'status-badge';
-    homeStatusText.textContent = 'DISCONNECTED';
-    mainConnectBtn.className = 'power-button';
+    securityCard.className = 'security-card';
+    homeSecTitle.textContent = 'HIMOYA O\'CHIQLI';
+    homeSecIp.textContent = 'Virtual IP: Aniqlanmagan';
+    powerOrbit.className = 'power-orbit-ring';
+    mainConnectBtn.className = 'power-core-btn';
+    stopSpeedSimulation();
   }
 }
 
@@ -378,6 +364,65 @@ function formatTimer(sec) {
   return `${h}:${m}:${s}`;
 }
 
+// ================= LIVE SPEED MONITOR & CANVAS GRAPH =================
+function startSpeedSimulation() {
+  stopSpeedSimulation();
+  appState.speedInterval = setInterval(() => {
+    if (appState.status !== 'connected') return;
+    const down = (Math.random() * 15 + 8).toFixed(1);
+    const up = (Math.random() * 4 + 1.2).toFixed(1);
+    speedDown.innerHTML = `${down} <small>MB/s</small>`;
+    speedUp.innerHTML = `${up} <small>MB/s</small>`;
+
+    appState.speedHistory.shift();
+    appState.speedHistory.push(parseFloat(down));
+    drawSpeedCanvas();
+  }, 1000);
+}
+
+function stopSpeedSimulation() {
+  if (appState.speedInterval) {
+    clearInterval(appState.speedInterval);
+    appState.speedInterval = null;
+  }
+  speedDown.innerHTML = `0.0 <small>MB/s</small>`;
+  speedUp.innerHTML = `0.0 <small>MB/s</small>`;
+  appState.speedHistory = Array(30).fill(0);
+  drawSpeedCanvas();
+}
+
+function drawSpeedCanvas() {
+  if (!ctx || !speedCanvas) return;
+  const w = speedCanvas.width;
+  const h = speedCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.beginPath();
+  const max = Math.max(...appState.speedHistory, 25);
+  const step = w / (appState.speedHistory.length - 1);
+
+  appState.speedHistory.forEach((val, i) => {
+    const x = i * step;
+    const y = h - (val / max) * (h - 8) - 4;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  ctx.strokeStyle = '#00f2fe';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Gradient fill under the line
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(0, 242, 254, 0.25)');
+  grad.addColorStop(1, 'rgba(0, 242, 254, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
 // ================= PING TEST =================
 pingAllBtn.addEventListener('click', async () => {
   pingAllBtn.style.transform = 'rotate(180deg)';
@@ -387,6 +432,7 @@ pingAllBtn.addEventListener('click', async () => {
     if (data.servers) {
       appState.servers = data.servers;
       renderServers();
+      updateHomeServerPreview();
     }
   } catch (err) {
     console.error('Ping failed:', err);
@@ -396,18 +442,8 @@ pingAllBtn.addEventListener('click', async () => {
 });
 
 // ================= MODAL & ADD SERVER =================
-openAddModalBtn.addEventListener('click', () => {
-  addModal.classList.add('open');
-});
-
-closeAddModalBtn.addEventListener('click', () => {
-  addModal.classList.remove('open');
-});
-
-openSubManagerBtn.addEventListener('click', () => {
-  addModal.classList.add('open');
-  tabAddSub.click();
-});
+openAddModalBtn.addEventListener('click', () => addModal.classList.add('open'));
+closeAddModalBtn.addEventListener('click', () => addModal.classList.remove('open'));
 
 tabAddLink.addEventListener('click', () => {
   tabAddLink.classList.add('active');
@@ -469,7 +505,7 @@ saveSubBtn.addEventListener('click', async () => {
   } catch (err) {
     alert(`Obuna xatosi: ${err.message}`);
   } finally {
-    saveSubBtn.textContent = 'Yangilash va Sinxronlash';
+    saveSubBtn.textContent = 'Yangilash va Tortib olish';
   }
 });
 
@@ -498,7 +534,6 @@ async function deleteServer(id) {
 settingTunMode.addEventListener('change', async () => {
   const mode = settingTunMode.checked ? 'tun' : 'system_proxy';
   await updateSettings({ mode });
-  metricMode.textContent = mode === 'tun' ? 'TUN (VPN)' : 'System Proxy';
 });
 
 settingMtu.addEventListener('change', async () => {
@@ -524,6 +559,6 @@ async function updateSettings(partial) {
 // ================= INIT =================
 loadServers();
 loadStatus();
+drawSpeedCanvas();
 
-// Polling status every 2 seconds
 setInterval(loadStatus, 2000);

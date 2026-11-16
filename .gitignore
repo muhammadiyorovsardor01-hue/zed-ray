@@ -20,6 +20,7 @@ data/*.json
 bin/*.exe
 bin/*.dll
 !bin/.gitkeep
+*.exe
 
 # Logs & Runtime cache
 logs/
