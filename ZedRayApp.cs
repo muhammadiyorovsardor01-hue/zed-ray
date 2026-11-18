@@ -123,6 +123,7 @@ namespace ZedRay
         // Servers Tab Controls
         private TextBlock subTitleText;
         private TextBlock subMetaText;
+        private Button btnDelSub;
         private Border subProgressFill;
         private TextBlock subUsageText;
         private TextBlock subDaysText;
@@ -649,8 +650,17 @@ namespace ZedRay
             Button btnAdd = CreateActionPillButton("+ Server qo'shish", "#00F2FE", "#04101E");
             btnAdd.Margin = new Thickness(6, 0, 0, 0);
             btnAdd.Click += (s, e) => { modalOverlay.Visibility = Visibility.Visible; };
+
+            // Delete the current subscription (only visible while a subscription exists)
+            btnDelSub = CreateIconButton("🗑", "#2A1620", "#F87171");
+            btnDelSub.Width = 30; btnDelSub.Height = 28;
+            btnDelSub.Margin = new Thickness(6, 0, 0, 0);
+            btnDelSub.ToolTip = "Obunani o'chirish";
+            btnDelSub.Click += (s, e) => DeleteSubscription();
+
             subBtns.Children.Add(btnSync);
             subBtns.Children.Add(btnAdd);
+            subBtns.Children.Add(btnDelSub);
             Grid.SetColumn(subBtns, 1);
             subTop.Children.Add(subBtns);
             subSp.Children.Add(subTop);
@@ -1360,6 +1370,7 @@ namespace ZedRay
             }
             subProgressBg.Visibility = hasQuota ? Visibility.Visible : Visibility.Collapsed;
             subStatsGrid.Visibility = hasQuota ? Visibility.Visible : Visibility.Collapsed;
+            if (btnDelSub != null) btnDelSub.Visibility = hasSub ? Visibility.Visible : Visibility.Collapsed;
 
             RenderServerList();
             UpdateActiveServerPreview();
@@ -1476,6 +1487,36 @@ namespace ZedRay
                 item.MouseLeftButtonDown += (s, e) => SelectServer(srvId);
                 serversStack.Children.Add(item);
             }
+        }
+
+        // Removes the current subscription and every server that came from it.
+        // Manually added servers are kept.
+        private void DeleteSubscription()
+        {
+            string name = string.IsNullOrEmpty(settings.SubName) ? "Obuna" : settings.SubName;
+            int count = servers.Count(x => x.Source == "subscription");
+            MessageBoxResult answer = MessageBox.Show(
+                "«" + name + "» obunasi va undagi " + count + " ta server o'chiriladi.\n\nDavom etasizmi?",
+                "Obunani o'chirish", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes) return;
+
+            // Drop the live connection if it runs through a subscription server
+            if ((isConnected || isConnecting) && (activeServer == null || activeServer.Source == "subscription"))
+                DisconnectVpn();
+
+            servers.RemoveAll(x => x.Source == "subscription");
+            settings.SubUrl = "";
+            settings.SubName = "";
+            settings.UsedGb = 0;
+            settings.TotalGb = 0;
+            settings.DaysLeft = 0;
+            if (settings.SelectedServerId != "auto" && !servers.Any(x => x.Id == settings.SelectedServerId))
+                settings.SelectedServerId = "auto";
+            if (txtSubUrl != null) txtSubUrl.Text = "";
+            if (txtSubName != null) txtSubName.Text = "MultiCo VPN";
+
+            SaveData();
+            RefreshAllUI();
         }
 
         private void SelectServer(string id)
