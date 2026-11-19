@@ -39,6 +39,8 @@ namespace ZedRay
         public string ShortId { get; set; }
         public string Flow { get; set; }
         public string Path { get; set; }
+        public string HostHeader { get; set; }
+        public string ServiceName { get; set; }
         public int Ping { get; set; }
         public string Source { get; set; }
     }
@@ -1605,9 +1607,21 @@ namespace ZedRay
                         WindowStyle = ProcessWindowStyle.Hidden
                     };
 
+                    // Keep the core's log in data\singbox.log so connection problems can be diagnosed
+                    string coreLogFile = System.IO.Path.Combine(dataDir, "singbox.log");
+                    try { File.WriteAllText(coreLogFile, "", new UTF8Encoding(false)); } catch { }
+
                     StringBuilder coreLog = new StringBuilder();
                     singboxProcess = Process.Start(psi);
-                    singboxProcess.ErrorDataReceived += (s2, e2) => { if (e2.Data != null) lock (coreLog) coreLog.AppendLine(e2.Data); };
+                    singboxProcess.ErrorDataReceived += (s2, e2) =>
+                    {
+                        if (e2.Data == null) return;
+                        lock (coreLog)
+                        {
+                            coreLog.AppendLine(e2.Data);
+                            try { File.AppendAllText(coreLogFile, e2.Data + "\r\n", new UTF8Encoding(false)); } catch { }
+                        }
+                    };
                     singboxProcess.OutputDataReceived += (s2, e2) => { };
                     singboxProcess.BeginErrorReadLine();
                     singboxProcess.BeginOutputReadLine();
@@ -1725,21 +1739,46 @@ namespace ZedRay
             }
             sb.AppendLine("  ],");
             sb.AppendLine("  \"outbounds\": [");
+            // The outbound follows the server's real security/transport: REALITY, plain TLS or none,
+            // over tcp / ws / grpc / httpupgrade. (It used to force REALITY+TCP for every server,
+            // which broke all WS/TLS servers.)
+            string net = (srv.Network ?? "tcp").ToLowerInvariant();
+            string sec = (srv.Security ?? "none").ToLowerInvariant();
+            string sni = string.IsNullOrEmpty(srv.Sni) ? srv.Host : srv.Sni;
+            string fp = string.IsNullOrEmpty(srv.Fingerprint) ? "chrome" : srv.Fingerprint;
+            string wsHost = !string.IsNullOrEmpty(srv.HostHeader) ? srv.HostHeader : sni;
+            string wsPath = string.IsNullOrEmpty(srv.Path) ? "/" : srv.Path;
+
+            List<string> props = new List<string>();
+            props.Add("      \"type\": \"vless\"");
+            props.Add("      \"tag\": \"proxy\"");
+            props.Add("      \"server\": \"" + EscapeJson(srv.Host) + "\"");
+            props.Add("      \"server_port\": " + srv.Port);
+            props.Add("      \"uuid\": \"" + EscapeJson(srv.Uuid) + "\"");
+            if (!string.IsNullOrEmpty(srv.Flow) && net == "tcp")
+                props.Add("      \"flow\": \"" + EscapeJson(srv.Flow) + "\"");
+
+            if (sec == "reality")
+            {
+                props.Add("      \"tls\": { \"enabled\": true, \"server_name\": \"" + EscapeJson(sni) + "\", " +
+                          "\"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" }, " +
+                          "\"reality\": { \"enabled\": true, \"public_key\": \"" + EscapeJson(srv.PublicKey) + "\", \"short_id\": \"" + EscapeJson(srv.ShortId) + "\" } }");
+            }
+            else if (sec == "tls")
+            {
+                props.Add("      \"tls\": { \"enabled\": true, \"server_name\": \"" + EscapeJson(sni) + "\", " +
+                          "\"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" } }");
+            }
+
+            if (net == "ws")
+                props.Add("      \"transport\": { \"type\": \"ws\", \"path\": \"" + EscapeJson(wsPath) + "\", \"headers\": { \"Host\": \"" + EscapeJson(wsHost) + "\" } }");
+            else if (net == "grpc")
+                props.Add("      \"transport\": { \"type\": \"grpc\", \"service_name\": \"" + EscapeJson(srv.ServiceName) + "\" }");
+            else if (net == "httpupgrade")
+                props.Add("      \"transport\": { \"type\": \"httpupgrade\", \"host\": \"" + EscapeJson(wsHost) + "\", \"path\": \"" + EscapeJson(wsPath) + "\" }");
+
             sb.AppendLine("    {");
-            sb.AppendLine("      \"type\": \"vless\",");
-            sb.AppendLine("      \"tag\": \"proxy\",");
-            sb.AppendLine("      \"server\": \"" + EscapeJson(srv.Host) + "\",");
-            sb.AppendLine("      \"server_port\": " + srv.Port + ",");
-            sb.AppendLine("      \"uuid\": \"" + EscapeJson(srv.Uuid) + "\",");
-            if (!string.IsNullOrEmpty(srv.Flow))
-                sb.AppendLine("      \"flow\": \"" + EscapeJson(srv.Flow) + "\",");
-            sb.AppendLine("      \"network\": \"tcp\",");
-            sb.AppendLine("      \"tls\": {");
-            sb.AppendLine("        \"enabled\": true,");
-            sb.AppendLine("        \"server_name\": \"" + EscapeJson(string.IsNullOrEmpty(srv.Sni) ? srv.Host : srv.Sni) + "\",");
-            sb.AppendLine("        \"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(string.IsNullOrEmpty(srv.Fingerprint) ? "chrome" : srv.Fingerprint) + "\" },");
-            sb.AppendLine("        \"reality\": { \"enabled\": true, \"public_key\": \"" + EscapeJson(srv.PublicKey) + "\", \"short_id\": \"" + EscapeJson(srv.ShortId) + "\" }");
-            sb.AppendLine("      }");
+            sb.AppendLine(string.Join(",\n", props));
             sb.AppendLine("    },");
             sb.AppendLine("    { \"type\": \"direct\", \"tag\": \"direct\" }");
             sb.AppendLine("  ],");
@@ -2031,12 +2070,16 @@ namespace ZedRay
                     Port = port,
                     Uuid = uuid,
                     Network = query.ContainsKey("type") ? query["type"] : "tcp",
-                    Security = query.ContainsKey("security") ? query["security"] : "reality",
-                    Sni = query.ContainsKey("sni") ? query["sni"] : host,
+                    // No "security" in a link means plain; a public key without it still means REALITY
+                    Security = query.ContainsKey("security") ? query["security"] : (query.ContainsKey("pbk") ? "reality" : "none"),
+                    Sni = query.ContainsKey("sni") ? query["sni"] : (query.ContainsKey("host") ? query["host"] : host),
                     Fingerprint = query.ContainsKey("fp") ? query["fp"] : "chrome",
                     PublicKey = query.ContainsKey("pbk") ? query["pbk"] : "",
                     ShortId = query.ContainsKey("sid") ? query["sid"] : "",
                     Flow = query.ContainsKey("flow") ? query["flow"] : "",
+                    Path = query.ContainsKey("path") ? query["path"] : "",
+                    HostHeader = query.ContainsKey("host") ? query["host"] : "",
+                    ServiceName = query.ContainsKey("serviceName") ? query["serviceName"] : "",
                     Ping = 0,
                     Source = "manual"
                 };
@@ -2298,7 +2341,10 @@ namespace ZedRay
                                 Security = p[7], Sni = p[8], Fingerprint = p[9],
                                 PublicKey = p[10], ShortId = p[11], Flow = p[12],
                                 Ping = p.Length > 13 ? int.Parse(p[13]) : 0,
-                                Source = p.Length > 14 ? p[14] : "manual"
+                                Source = p.Length > 14 ? p[14] : "manual",
+                                Path = p.Length > 15 ? p[15] : "",
+                                HostHeader = p.Length > 16 ? p[16] : "",
+                                ServiceName = p.Length > 17 ? p[17] : ""
                             });
                         }
                     }
@@ -2345,7 +2391,7 @@ namespace ZedRay
                 List<string> lines = servers.Select(s => string.Join("|",
                     Clean(s.Id), Clean(s.Name), Clean(s.Country), Clean(s.Host), s.Port, Clean(s.Uuid), Clean(s.Network),
                     Clean(s.Security), Clean(s.Sni), Clean(s.Fingerprint), Clean(s.PublicKey), Clean(s.ShortId), Clean(s.Flow),
-                    s.Ping, Clean(s.Source))).ToList();
+                    s.Ping, Clean(s.Source), Clean(s.Path), Clean(s.HostHeader), Clean(s.ServiceName))).ToList();
                 File.WriteAllLines(serversFile, lines, Encoding.UTF8);
 
                 string cfg = string.Join("|", settings.Mode, settings.Mtu, settings.Watchdog, settings.Routing, settings.SelectedServerId,
