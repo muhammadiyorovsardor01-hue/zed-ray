@@ -16,14 +16,24 @@ let subscriptionInfo = { ...INITIAL_SUBSCRIPTION };
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
+const ALLOWED_ORIGINS = new Set([
+  `http://127.0.0.1:${PORT}`,
+  `http://localhost:${PORT}`,
+  'https://muhammadiyorovsardor01-hue.github.io'
+]);
 const VALID_MODES = new Set(['tun', 'system_proxy']);
 const VALID_ROUTING = new Set(['rule', 'global']);
 
 // Helper to send JSON responses.
-// No CORS headers on purpose: the UI is served from this very server (same origin),
-// and a wildcard CORS policy would let any website you open control your VPN.
-function sendJson(res, data, status = 200) {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+// Allows CORS strictly for local loopback and the trusted ZedRay GitHub Pages origin.
+function sendJson(res, data, status = 200, requestOrigin = '') {
+  const headers = { 'Content-Type': 'application/json' };
+  const normalized = String(requestOrigin || '').toLowerCase();
+  if (ALLOWED_ORIGINS.has(normalized)) {
+    headers['Access-Control-Allow-Origin'] = requestOrigin;
+    headers['Vary'] = 'Origin';
+  }
+  res.writeHead(status, headers);
   res.end(JSON.stringify(data));
 }
 
@@ -119,22 +129,43 @@ const server = http.createServer(async (req, res) => {
     return res.end('Forbidden');
   }
 
-  // Reject cross-site state-changing requests (CSRF protection)
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const origin = req.headers.origin;
-    if (origin && !ALLOWED_HOSTS.has(origin.replace(/^https?:\/\//, '').toLowerCase())) {
+  const rawOrigin = String(req.headers.origin || '');
+  const originLower = rawOrigin.toLowerCase();
+  const isAllowedOrigin = !rawOrigin || ALLOWED_ORIGINS.has(originLower);
+
+  // Preflight CORS + Chrome Private Network Access check for trusted PWA origin
+  if (req.method === 'OPTIONS') {
+    if (!rawOrigin || !ALLOWED_ORIGINS.has(originLower)) {
       res.writeHead(403);
       return res.end('Forbidden');
     }
+    const headers = {
+      'Access-Control-Allow-Origin': rawOrigin,
+      'Vary': 'Origin',
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    };
+    if (String(req.headers['access-control-request-private-network'] || '').toLowerCase() === 'true') {
+      headers['Access-Control-Allow-Private-Network'] = 'true';
+    }
+    res.writeHead(204, headers);
+    return res.end();
   }
 
+  // Reject cross-site requests from untrusted origins (CSRF / PNA protection)
+  if (rawOrigin && !isAllowedOrigin) {
+    res.writeHead(403);
+    return res.end('Forbidden');
+  }
+
+  const replyJson = (data, status = 200) => sendJson(res, data, status, rawOrigin);
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
   // --- API ROUTES ---
   if (url.pathname === '/api/status' && req.method === 'GET') {
     const statusData = singbox.getStatus();
     const settings = getSettings();
-    return sendJson(res, {
+    return replyJson({
       ...statusData,
       settings
     });
@@ -143,7 +174,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/servers' && req.method === 'GET') {
     const servers = getServers();
     const settings = getSettings();
-    return sendJson(res, {
+    return replyJson({
       servers,
       subscription: subscriptionInfo,
       selectedServerId: settings.selectedServerId
@@ -167,7 +198,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (!targetServer) {
-      return sendJson(res, { success: false, error: 'No servers configured' }, 400);
+      return replyJson({ success: false, error: 'No servers configured' }, 400);
     }
 
     // Save selection
@@ -181,12 +212,12 @@ const server = http.createServer(async (req, res) => {
       autoReconnect: settings.autoReconnect
     });
 
-    return sendJson(res, { ...result, activeServer: targetServer });
+    return replyJson({ ...result, activeServer: targetServer });
   }
 
   if (url.pathname === '/api/disconnect' && req.method === 'POST') {
     const result = await singbox.stop();
-    return sendJson(res, result);
+    return replyJson(result);
   }
 
   if (url.pathname === '/api/ping' && req.method === 'POST') {
@@ -200,18 +231,18 @@ const server = http.createServer(async (req, res) => {
     });
 
     saveServers(updatedServers);
-    return sendJson(res, { servers: updatedServers });
+    return replyJson({ servers: updatedServers });
   }
 
   if (url.pathname === '/api/servers/add' && req.method === 'POST') {
     const body = await parseBody(req);
     if (!body.link) {
-      return sendJson(res, { success: false, error: 'Link is required' }, 400);
+      return replyJson({ success: false, error: 'Link is required' }, 400);
     }
 
     const srv = parseShareLink(body.link);
     if (!srv) {
-      return sendJson(res, { success: false, error: 'Invalid VLESS/Reality link format' }, 400);
+      return replyJson({ success: false, error: 'Invalid VLESS/Reality link format' }, 400);
     }
 
     srv.country = detectFlag(srv.name);
@@ -222,7 +253,7 @@ const server = http.createServer(async (req, res) => {
     servers.unshift(srv);
     saveServers(servers);
 
-    return sendJson(res, { success: true, server: srv });
+    return replyJson({ success: true, server: srv });
   }
 
   if (url.pathname === '/api/subscription/update' && req.method === 'POST') {
@@ -230,7 +261,7 @@ const server = http.createServer(async (req, res) => {
     const subUrl = body.url || subscriptionInfo.url;
 
     if (!subUrl) {
-      return sendJson(res, { success: false, error: 'Subscription URL is required' }, 400);
+      return replyJson({ success: false, error: 'Subscription URL is required' }, 400);
     }
 
     try {
@@ -238,7 +269,7 @@ const server = http.createServer(async (req, res) => {
       const parsedServers = parseSubscriptionContent(result.data);
 
       if (parsedServers.length === 0) {
-        return sendJson(res, { success: false, error: 'No valid VLESS servers found in subscription' }, 400);
+        return replyJson({ success: false, error: 'No valid VLESS servers found in subscription' }, 400);
       }
 
       parsedServers.forEach(s => {
@@ -270,9 +301,9 @@ const server = http.createServer(async (req, res) => {
         url: subUrl
       };
 
-      return sendJson(res, { success: true, servers: merged, subscription: subscriptionInfo });
+      return replyJson({ success: true, servers: merged, subscription: subscriptionInfo });
     } catch (err) {
-      return sendJson(res, { success: false, error: `Failed to fetch subscription: ${err.message}` }, 500);
+      return replyJson({ success: false, error: `Failed to fetch subscription: ${err.message}` }, 500);
     }
   }
 
@@ -289,7 +320,7 @@ const server = http.createServer(async (req, res) => {
     if (typeof body.selectedServerId === 'string') updated.selectedServerId = body.selectedServerId;
 
     saveSettings(updated);
-    return sendJson(res, { success: true, settings: updated });
+    return replyJson({ success: true, settings: updated });
   }
 
   if (url.pathname.startsWith('/api/servers/') && req.method === 'DELETE') {
@@ -297,7 +328,7 @@ const server = http.createServer(async (req, res) => {
     let servers = getServers();
     servers = servers.filter(s => s.id !== id);
     saveServers(servers);
-    return sendJson(res, { success: true });
+    return replyJson({ success: true });
   }
 
   // --- STATIC FILES SERVING ---

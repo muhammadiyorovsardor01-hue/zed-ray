@@ -2,21 +2,24 @@
 <html lang="uz">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#090B12">
-  <meta name="description" content="ZedRay PRO VPN — Sing-box 1.14.4 asosidagi tezkor VLESS Reality va WS+TLS VPN mijozi (Windows)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="ZedRay PRO — Sing-box 1.14.4 VPN & Proxy ilovasi">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <title>ZedRay PRO VPN · Sing-box 1.14.4 Windows Mijozi</title>
+  <title>ZedRay PRO</title>
   <style>
     :root {
       --bg: #090B12;
-      --bg-soft: #0D101B;
-      --card: #111524;
-      --card-2: #141A2E;
-      --border: #1F263D;
-      --border-bright: #2B3657;
+      --sidebar: #0D101B;
+      --surface: #111524;
+      --surface-2: #141A2E;
+      --border: #1E253D;
+      --border-hi: #2B3657;
       --cyan: #00F2FE;
       --blue: #3B82F6;
       --purple: #A855F7;
@@ -26,216 +29,180 @@
       --text: #F8FAFC;
       --muted: #94A3B8;
       --dim: #64748B;
-      --radius: 18px;
       --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
       --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--font);
-      background:
-        radial-gradient(900px 500px at 12% -5%, rgba(0, 242, 254, 0.12), transparent 60%),
-        radial-gradient(800px 500px at 88% 8%, rgba(168, 85, 247, 0.11), transparent 60%),
-        var(--bg);
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: var(--bg);
       color: var(--text);
-      line-height: 1.55;
-      min-height: 100vh;
-      overflow-x: hidden;
+      font-family: var(--font);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
-
-    a { color: inherit; text-decoration: none; }
+    input, textarea, pre, code, select { user-select: text; font-family: inherit; }
     button { font-family: inherit; cursor: pointer; }
 
-    .container {
-      width: 100%;
-      max-width: 1160px;
-      margin: 0 auto;
-      padding: 0 20px;
+    /* APP SHELL */
+    .zedray-app-shell {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      height: 100dvh;
+      width: 100vw;
+      background:
+        radial-gradient(640px 420px at 75% 15%, rgba(0, 242, 254, 0.07), transparent 65%),
+        radial-gradient(520px 380px at 30% 85%, rgba(168, 85, 247, 0.06), transparent 65%),
+        var(--bg);
     }
 
-    /* HEADER */
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 40;
-      background: rgba(9, 11, 18, 0.82);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
-    }
-    .topbar-inner {
+    /* LEFT SIDEBAR (DESKTOP) */
+    .app-sidebar {
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      height: 70px;
+      flex-direction: column;
+      padding: 16px 12px;
+      gap: 14px;
+      min-height: 0;
     }
-    .brand {
+    .brand-row {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-weight: 800;
-      font-size: 20px;
-      letter-spacing: -0.02em;
+      padding: 4px 6px 12px;
+      border-bottom: 1px solid #161C2E;
     }
-    .brand-mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 11px;
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
       background: linear-gradient(135deg, var(--cyan), var(--blue));
       display: grid;
       place-items: center;
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+      box-shadow: 0 0 18px rgba(0, 242, 254, 0.25);
       flex-shrink: 0;
     }
-    .core-pill {
-      font-size: 10px;
+    .brand-title { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+    .core-badge {
+      font-size: 9.5px;
       font-weight: 800;
       color: var(--cyan);
       background: #13223B;
       border: 1px solid rgba(0, 242, 254, 0.45);
-      border-radius: 6px;
-      padding: 2px 7px;
+      border-radius: 5px;
+      padding: 2px 6px;
       letter-spacing: 0.04em;
     }
-    .nav-links {
+
+    .side-nav {
       display: flex;
-      align-items: center;
-      gap: 22px;
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 600;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
     }
-    .nav-links a:hover { color: var(--cyan); }
-    .header-actions {
+    .nav-item {
       display: flex;
       align-items: center;
       gap: 10px;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 16px;
+      width: 100%;
+      padding: 11px 12px;
       border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
       font-size: 13.5px;
       font-weight: 700;
-      border: 1px solid transparent;
-      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
-      white-space: nowrap;
+      text-align: left;
+      transition: all 0.16s ease;
     }
-    .btn:active { transform: translateY(1px); }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--cyan), var(--blue));
+    .nav-item:hover { background: #13182A; color: var(--text); }
+    .nav-item.active {
+      background: linear-gradient(90deg, var(--cyan), var(--blue));
       color: #04101E;
-      box-shadow: 0 6px 24px rgba(0, 242, 254, 0.22);
+      box-shadow: 0 4px 18px rgba(0, 242, 254, 0.22);
     }
-    .btn-primary:hover { box-shadow: 0 8px 28px rgba(0, 242, 254, 0.36); transform: translateY(-1px); }
-    .btn-glass {
-      background: #13192B;
-      color: var(--text);
-      border-color: var(--border-bright);
-    }
-    .btn-glass:hover { border-color: var(--cyan); color: var(--cyan); }
-    .btn-purple {
-      background: rgba(168, 85, 247, 0.15);
-      color: #E9D5FF;
-      border-color: rgba(168, 85, 247, 0.45);
-    }
-    .btn-purple:hover { background: rgba(168, 85, 247, 0.25); border-color: var(--purple); }
 
-    /* HERO */
-    .hero {
-      padding: 56px 0 36px;
+    .side-footer {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid #161C2E;
     }
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 38px;
-      align-items: center;
-    }
-    .eyebrow {
-      display: inline-flex;
+    .bridge-chip {
+      display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(0, 242, 254, 0.08);
-      border: 1px solid rgba(0, 242, 254, 0.28);
-      color: var(--cyan);
-      border-radius: 999px;
-      padding: 6px 14px;
-      font-size: 12px;
+      padding: 9px 10px;
+      border-radius: 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11.5px;
       font-weight: 700;
-      margin-bottom: 18px;
+      text-align: left;
     }
-    .eyebrow-dot {
+    .bridge-chip:hover { border-color: var(--border-hi); color: var(--text); }
+    .bridge-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
+      background: var(--amber);
+      flex-shrink: 0;
+    }
+    .bridge-chip.online .bridge-dot {
       background: var(--green);
-      box-shadow: 0 0 10px var(--green);
+      box-shadow: 0 0 8px var(--green);
     }
-    h1 {
-      font-size: clamp(32px, 4.4vw, 52px);
-      line-height: 1.12;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
-    }
-    .grad-text {
-      background: linear-gradient(90deg, var(--cyan), #60A5FA 55%, var(--purple));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-    .hero-sub {
-      color: var(--muted);
-      font-size: 16.5px;
-      max-width: 580px;
-      margin-bottom: 22px;
-    }
-    .cap-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 26px;
-    }
-    .cap-pill {
+    .install-side-btn {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 11px;
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      background: rgba(168, 85, 247, 0.14);
+      color: #E9D5FF;
       font-size: 12px;
-      font-weight: 700;
-      color: #CBD5E1;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 12px;
-    }
-    .hero-ctas {
+      font-weight: 800;
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .install-side-btn:hover { background: rgba(168, 85, 247, 0.24); border-color: var(--purple); }
+
+    /* MAIN WORKSPACE */
+    .app-main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
     }
 
-    /* INTERACTIVE DASHBOARD PREVIEW */
-    .preview-shell {
-      background: var(--bg-soft);
-      border: 1.5px solid var(--border-bright);
-      border-radius: 24px;
-      padding: 18px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 40px rgba(0, 242, 254, 0.08);
-      max-width: 430px;
-      width: 100%;
-      margin: 0 auto;
-    }
-    .preview-top {
+    .top-bar {
+      height: 56px;
+      flex-shrink: 0;
+      background: rgba(13, 16, 27, 0.92);
+      border-bottom: 1px solid var(--border);
+      padding: 0 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 12px;
-      margin-bottom: 12px;
-      border-bottom: 1px solid var(--border);
+      gap: 12px;
     }
+    .top-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .mobile-brand { display: none; align-items: center; gap: 8px; }
+    .view-title { font-size: 15.5px; font-weight: 800; letter-spacing: -0.01em; }
+    .top-right { display: flex; align-items: center; gap: 8px; }
+
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -244,73 +211,169 @@
       border-radius: 999px;
       background: #131726;
       border: 1px solid #242B42;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 800;
       color: var(--muted);
     }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
     .status-pill.connected {
       color: var(--green);
       border-color: rgba(16, 185, 129, 0.45);
-      background: rgba(16, 185, 129, 0.09);
+      background: rgba(16, 185, 129, 0.1);
     }
+    .status-pill.connected .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
     .status-pill.connecting {
       color: var(--amber);
       border-color: rgba(245, 158, 11, 0.45);
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--dim);
-    }
-    .status-pill.connected .status-dot { background: var(--green); box-shadow: 0 0 10px var(--green); }
-    .status-pill.connecting .status-dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+    .status-pill.connecting .status-dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 
-    .sim-sec-card {
-      background: var(--card);
+    .top-mode-pill {
+      background: #161D31;
+      border: 1px solid #283352;
+      color: var(--cyan);
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 10.5px;
+      font-weight: 800;
+    }
+    .top-icon-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 9px;
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      background: rgba(168, 85, 247, 0.15);
+      color: #E9D5FF;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    /* COMPACT / MOBILE SEGMENTED NAV BAR */
+    .compact-nav-wrap {
+      display: none;
+      padding: 10px 14px 4px;
+      flex-shrink: 0;
+    }
+    .compact-nav {
+      background: #0F1320;
+      border: 1px solid #1D2338;
+      border-radius: 13px;
+      padding: 4px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+    .compact-nav button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 9px;
+      padding: 8px 4px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .compact-nav button.active {
+      background: linear-gradient(90deg, var(--cyan), var(--blue));
+      color: #04101E;
+    }
+
+    /* VIEW HOST */
+    .views-host {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 18px 20px 22px;
+    }
+    .views-host::-webkit-scrollbar { width: 6px; }
+    .views-host::-webkit-scrollbar-thumb { background: #1E263D; border-radius: 99px; }
+
+    .tab-view {
+      display: none;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .tab-view.active { display: block; }
+
+    /* SHARED BUTTONS & CARDS */
+    .card {
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 12px 14px;
+      padding: 14px 16px;
+    }
+    .pill-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      border: 0;
+      border-radius: 9px;
+      padding: 7px 12px;
+      font-size: 11.5px;
+      font-weight: 800;
+      transition: transform 0.14s ease, opacity 0.14s ease;
+      white-space: nowrap;
+    }
+    .pill-btn:active { transform: scale(0.98); }
+    .pill-cyan { background: var(--cyan); color: #04101E; }
+    .pill-dark { background: #172542; color: var(--cyan); }
+    .pill-purple { background: var(--purple); color: #FFFFFF; }
+    .pill-red { background: #2A1620; color: var(--red); }
+
+    /* TAB 1: DASHBOARD */
+    .dash-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .sec-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 12px;
       transition: border-color 0.25s ease;
     }
-    .sim-sec-card.connected { border-color: var(--green); }
-    .sim-sec-title { font-size: 12px; font-weight: 800; color: var(--muted); }
-    .sim-sec-card.connected .sim-sec-title { color: var(--green); }
-    .sim-sec-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
-    .mode-switch-btn {
+    .sec-card.connected { border-color: var(--green); }
+    .sec-title { font-size: 12.5px; font-weight: 800; color: var(--muted); }
+    .sec-card.connected .sec-title { color: var(--green); }
+    .sec-card.connecting .sec-title { color: var(--amber); }
+    .sec-sub { font-size: 11.5px; color: var(--dim); margin-top: 3px; }
+    .mode-badge {
       background: #161D31;
       border: 1px solid #283352;
       color: var(--cyan);
       font-size: 10.5px;
       font-weight: 800;
-      padding: 6px 9px;
+      padding: 5px 10px;
       border-radius: 8px;
       white-space: nowrap;
+      cursor: pointer;
     }
 
-    .power-zone {
-      display: grid;
-      place-items: center;
-      padding: 14px 0 8px;
-      position: relative;
+    .power-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0 2px;
+      gap: 8px;
     }
     .power-ring {
-      width: 168px;
-      height: 168px;
+      width: 184px;
+      height: 184px;
       border-radius: 50%;
-      border: 2px dashed #242E4C;
+      border: 2px dashed #222B45;
       display: grid;
       place-items: center;
-      transition: border-color 0.3s ease, transform 0.3s ease;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
     }
     .power-ring.connected {
       border-color: var(--cyan);
-      box-shadow: 0 0 36px rgba(0, 242, 254, 0.2);
+      box-shadow: 0 0 38px rgba(0, 242, 254, 0.18);
     }
     .power-ring.connecting {
       border-color: var(--amber);
@@ -318,9 +381,9 @@
     }
     @keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    .power-btn {
-      width: 134px;
-      height: 134px;
+    .power-core {
+      width: 148px;
+      height: 148px;
       border-radius: 50%;
       border: 3.5px solid #2A3454;
       background: linear-gradient(145deg, #171C2E, #0F1320);
@@ -330,50 +393,37 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-      transition: all 0.25s ease;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.72);
+      transition: all 0.22s ease;
     }
-    .power-btn:hover { border-color: var(--cyan); transform: scale(1.02); }
-    .power-btn.connected {
+    .power-core:hover { border-color: var(--cyan); transform: scale(1.02); }
+    .power-core.connected {
       background: linear-gradient(145deg, var(--cyan), #2563EB);
       border-color: #7DD3FC;
-      color: #FFFFFF;
-      box-shadow: 0 0 32px rgba(0, 242, 254, 0.35);
+      box-shadow: 0 0 34px rgba(0, 242, 254, 0.34);
     }
-    .power-btn.connecting {
-      border-color: var(--amber);
-      color: var(--amber);
-    }
-    .power-label { font-size: 13.5px; font-weight: 800; letter-spacing: 0.04em; }
+    .power-core.connecting { border-color: var(--amber); color: var(--amber); }
+    .power-lbl { font-size: 14px; font-weight: 800; letter-spacing: 0.04em; }
 
-    .sim-timer {
-      text-align: center;
+    .timer-readout {
       font-family: var(--mono);
-      font-size: 24px;
+      font-size: 27px;
       font-weight: 800;
-      margin: 4px 0 12px;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
 
-    .sim-net-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .sim-speeds {
+    .net-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 10px;
       text-align: center;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
-    .spd-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; }
-    .spd-lbl.dl { color: var(--cyan); }
-    .spd-lbl.ul { color: var(--purple); }
-    .spd-val { font-size: 16px; font-weight: 800; margin-top: 2px; }
-    #simCanvas {
+    .net-lbl { font-size: 10px; font-weight: 800; }
+    .net-lbl.dl { color: var(--cyan); }
+    .net-lbl.ul { color: var(--purple); }
+    .net-val { font-size: 17px; font-weight: 800; margin-top: 2px; }
+    #speedCanvas {
       width: 100%;
       height: 52px;
       display: block;
@@ -381,792 +431,861 @@
       border-radius: 10px;
     }
 
-    .sim-server-row {
+    .active-srv-card {
       background: #131829;
       border: 1px solid #242D4A;
+      border-radius: 16px;
+      padding: 13px 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .active-srv-card:hover { border-color: var(--cyan); }
+    .srv-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .flag-box {
+      width: 38px;
+      height: 26px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #2D3748;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      background: #0F2942;
+    }
+    .srv-name { font-size: 13.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .srv-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .switch-tag {
+      background: #1A243D;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 6px 10px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+
+    /* TAB 2: SERVERS */
+    .sub-banner {
+      background: linear-gradient(125deg, #101D38, #1A1235);
+      border: 1px solid var(--cyan);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .sub-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .sub-title { font-size: 16px; font-weight: 800; }
+    .sub-meta { font-size: 11.5px; color: #93C5FD; margin-top: 2px; }
+    .sub-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .spin-icon { display: inline-block; }
+    .spinning .spin-icon { animation: spinSlow 0.8s linear infinite; }
+    .progress-track {
+      height: 6px;
+      background: #090D18;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 10px 0 8px;
+    }
+    .progress-fill { height: 100%; width: 0%; background: var(--cyan); border-radius: 4px; transition: width 0.3s ease; }
+    .sub-stats { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+
+    .search-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 9px 12px;
+      font-size: 12.5px;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--cyan); }
+
+    .auto-card {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      background: #111524;
+      border: 1.5px solid #1F263D;
       border-radius: 14px;
       padding: 11px 13px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .auto-card.selected { background: #132038; border-color: var(--cyan); }
+    .bolt-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: #162844;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .server-list { display: flex; flex-direction: column; gap: 8px; }
+    .srv-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 11px 13px;
       cursor: pointer;
     }
-    .sim-server-row:hover { border-color: var(--cyan); }
-    .sim-srv-name { font-size: 13px; font-weight: 700; }
-    .sim-srv-meta { font-size: 11px; color: var(--muted); }
-    .sim-hint {
-      text-align: center;
-      font-size: 11px;
+    .srv-item.selected { background: #14223D; border-color: var(--cyan); border-width: 1.5px; }
+    .srv-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ping-pill {
+      background: #0B0E18;
+      border: 1px solid var(--dim);
       color: var(--dim);
-      margin-top: 10px;
-    }
-
-    /* SECTIONS */
-    section.block { padding: 54px 0; }
-    .sec-head {
-      margin-bottom: 28px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 14px;
-    }
-    .sec-head h2 {
-      font-size: clamp(24px, 3vw, 34px);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 11px;
       font-weight: 800;
-      letter-spacing: -0.02em;
     }
-    .sec-head p { color: var(--muted); max-width: 600px; font-size: 15px; }
+    .ping-pill.fast { border-color: var(--green); color: var(--green); }
+    .ping-pill.med { border-color: var(--amber); color: var(--amber); }
+    .ping-pill.slow { border-color: #EF4444; color: #EF4444; }
+    .del-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      border: 0;
+      background: #1B1626;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .del-btn:hover { background: #2A1620; color: var(--red); }
 
-    /* FEATURES */
-    .feat-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-    }
-    .feat-card {
-      background: rgba(17, 21, 36, 0.9);
+    /* TAB 3 & 5: OPTION CARDS */
+    .sec-caption { font-size: 15px; font-weight: 800; margin-bottom: 10px; }
+    .choice-card {
+      background: #0F1322;
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      transition: border-color 0.2s ease, transform 0.2s ease;
+      border-radius: 14px;
+      padding: 13px 15px;
+      margin-bottom: 10px;
+      cursor: pointer;
     }
-    .feat-card:hover { border-color: rgba(0, 242, 254, 0.55); transform: translateY(-2px); }
-    .feat-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      background: #16223D;
-      border: 1px solid #263861;
-      display: grid;
-      place-items: center;
-      font-size: 18px;
-      margin-bottom: 12px;
+    .choice-card.selected {
+      background: #121D38;
+      border: 1.5px solid var(--cyan);
     }
-    .feat-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 7px; }
-    .feat-card p { font-size: 13.5px; color: var(--muted); }
-
-    /* CONFIGURATOR */
-    .cfg-panel {
-      background: var(--card);
-      border: 1px solid var(--border-bright);
-      border-radius: 22px;
-      padding: 24px;
-      display: grid;
-      grid-template-columns: 1fr 1.05fr;
-      gap: 22px;
-    }
-    .field-label {
+    .choice-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .choice-title { font-size: 13px; font-weight: 800; }
+    .tag-pill {
+      font-size: 9.5px;
+      font-weight: 800;
+      border-radius: 7px;
+      padding: 2px 8px;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+    .tag-green { background: #064E3B; border-color: var(--green); color: #6EE7B7; }
+    .tag-purple { background: #3B1D54; border-color: var(--purple); color: #D8B4FE; }
+    .tag-cyan { background: #0F2942; border-color: var(--cyan); color: var(--cyan); }
+    .choice-desc { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+    .info-box {
+      background: #101E2E;
+      border: 1px solid var(--cyan);
+      border-radius: 14px;
+      padding: 13px 15px;
+      font-size: 11.5px;
+      color: #CBD5E1;
+      line-height: 1.6;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .chk-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
       font-size: 12.5px;
       font-weight: 700;
-      color: var(--cyan);
-      margin-bottom: 8px;
+      cursor: pointer;
     }
-    textarea.vless-box {
-      width: 100%;
-      min-height: 112px;
-      resize: vertical;
-      background: #090B12;
+    .chk-row input { margin-top: 3px; accent-color: var(--cyan); width: 15px; height: 15px; }
+    .select-box {
+      background: #090C15;
       color: var(--text);
-      border: 1px solid var(--border-bright);
-      border-radius: 14px;
-      padding: 12px;
-      font-family: var(--mono);
-      font-size: 12.5px;
+      border: 1px solid var(--border-hi);
+      border-radius: 9px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
       outline: none;
     }
-    textarea.vless-box:focus { border-color: var(--cyan); }
-    .cfg-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 10px 0 16px;
-    }
-    .opt-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .opt-group {
-      background: #0C101C;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 10px 12px;
-    }
-    .opt-title { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
-    .seg {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-    }
-    .seg button, .mtu-select {
-      background: #141A2D;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 9px;
-      padding: 7px 8px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .seg button.active {
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(59, 130, 246, 0.22));
-      border-color: var(--cyan);
+
+    /* TAB 4: CONFIGURATOR */
+    .vless-area {
+      width: 100%;
+      min-height: 92px;
+      resize: vertical;
+      background: #090C15;
+      border: 1px solid var(--border-hi);
+      border-radius: 12px;
       color: var(--text);
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      outline: none;
     }
-    .mtu-select { width: 100%; color: var(--text); outline: none; }
-
-    .parsed-badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .p-badge {
-      background: #0D1323;
+    .vless-area:focus { border-color: var(--cyan); }
+    .badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .meta-badge {
+      background: #0B0E18;
       border: 1px solid var(--border);
-      border-radius: 9px;
-      padding: 5px 10px;
-      font-size: 11.5px;
+      border-radius: 8px;
+      padding: 4px 9px;
+      font-size: 11px;
       color: var(--muted);
     }
-    .p-badge b { color: var(--text); }
-    .cfg-error {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: rgba(248, 113, 113, 0.12);
-      border: 1px solid rgba(248, 113, 113, 0.45);
-      color: #FCA5A5;
-      font-size: 12.5px;
-      display: none;
-    }
-
-    .json-wrap {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-    pre.json-out {
-      flex: 1;
-      min-height: 310px;
-      max-height: 440px;
-      overflow: auto;
+    .meta-badge b { color: var(--text); }
+    .json-pre {
       background: #07090F;
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px;
+      border-radius: 12px;
+      padding: 12px;
       font-family: var(--mono);
-      font-size: 12px;
+      font-size: 11.5px;
       line-height: 1.5;
       color: #A5F3FC;
+      max-height: 330px;
+      overflow: auto;
+      margin-top: 10px;
     }
-
-    /* QUICKSTART & SHORTCUTS */
-    .guide-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-    }
-    .guide-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-    }
-    .step-num {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 800;
-      color: var(--cyan);
-      background: rgba(0, 242, 254, 0.1);
-      border: 1px solid rgba(0, 242, 254, 0.3);
-      border-radius: 7px;
-      padding: 3px 9px;
-      margin-bottom: 10px;
-    }
-    .guide-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
-    .guide-card p, .guide-card li { font-size: 13.5px; color: var(--muted); }
-    .guide-card ul { padding-left: 18px; display: grid; gap: 6px; margin-top: 8px; }
-    code {
-      font-family: var(--mono);
+    .err-banner {
+      display: none;
+      margin-top: 8px;
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: rgba(248, 113, 113, 0.14);
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      color: #FCA5A5;
       font-size: 12px;
-      background: #090C15;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1px 6px;
-      color: #BAE6FD;
-    }
-
-    /* FOOTER */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 28px 0 38px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .footer-inner {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .zero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 11px;
-      border-radius: 999px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      color: #6EE7B7;
-      font-size: 12px;
-      font-weight: 700;
     }
 
     /* MODAL */
-    .modal-backdrop {
+    .modal-overlay {
       position: fixed;
       inset: 0;
-      z-index: 60;
-      background: rgba(5, 7, 14, 0.78);
+      z-index: 80;
+      background: rgba(5, 7, 14, 0.82);
       backdrop-filter: blur(8px);
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 18px;
+      padding: 16px;
     }
-    .modal-backdrop.open { display: flex; }
-    .modal-card {
+    .modal-overlay.open { display: flex; }
+    .modal-box {
       width: 100%;
-      max-width: 480px;
-      background: var(--card);
+      max-width: 420px;
+      background: var(--surface);
       border: 1.5px solid var(--cyan);
-      border-radius: 20px;
-      padding: 22px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
     }
-    .modal-top {
+    .modal-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
-    .modal-top h3 { font-size: 18px; font-weight: 800; }
-    .modal-step {
+    .modal-head h3 { font-size: 16px; font-weight: 800; }
+    .modal-lbl { font-size: 11.5px; font-weight: 800; margin-bottom: 5px; display: block; }
+    .modal-input {
+      width: 100%;
+      background: #090C15;
+      border: 1px solid #242D4A;
+      border-radius: 10px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+      outline: none;
+      margin-bottom: 8px;
+    }
+    .modal-input:focus { border-color: var(--cyan); }
+    .guide-step {
       background: #0B0E18;
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 10px;
-      font-size: 13px;
+      border-radius: 11px;
+      padding: 11px;
+      margin-bottom: 9px;
+      font-size: 12px;
       color: #CBD5E1;
+      line-height: 1.5;
     }
-    .modal-step strong { color: var(--cyan); display: block; margin-bottom: 4px; }
+    .guide-step strong { color: var(--cyan); display: block; margin-bottom: 3px; }
+    .toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #13223B;
+      border: 1px solid var(--cyan);
+      color: var(--text);
+      padding: 9px 16px;
+      border-radius: 11px;
+      font-size: 12.5px;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.2s ease;
+      z-index: 95;
+      max-width: 90vw;
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    @media (max-width: 960px) {
-      .hero-grid, .cfg-panel { grid-template-columns: 1fr; }
-      .feat-grid, .guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .nav-links { display: none; }
+    body.is-standalone .install-side-btn,
+    body.is-standalone .top-icon-btn {
+      display: none !important;
     }
-    @media (max-width: 620px) {
-      .feat-grid, .guide-grid, .opt-grid { grid-template-columns: 1fr; }
-      .topbar-inner { height: 64px; }
-      .btn { padding: 9px 12px; font-size: 12.5px; }
-      .hero { padding-top: 34px; }
+
+    @media (max-width: 859px) {
+      .zedray-app-shell { grid-template-columns: 1fr; }
+      .app-sidebar { display: none; }
+      .mobile-brand { display: flex; }
+      .view-title { display: none; }
+      .compact-nav-wrap { display: block; }
+      .top-icon-btn { display: inline-flex; }
+      .views-host { padding: 12px 14px 18px; }
     }
   </style>
 </head>
 <body>
-  <!-- STICKY HEADER -->
-  <header class="topbar">
-    <div class="container topbar-inner">
-      <a href="#" class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+  <div class="zedray-app-shell">
+    <!-- DESKTOP LEFT SIDEBAR -->
+    <aside class="app-sidebar">
+      <div class="brand-row">
+        <span class="brand-icon" aria-hidden="true">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
             <polygon points="14,2 6,13 12,13 10,22 19,10 13,10" fill="#FFFFFF"/>
           </svg>
         </span>
-        <span>ZedRay</span>
-        <span class="core-pill">CORE 1.14</span>
-      </a>
+        <span class="brand-title">ZedRay</span>
+        <span class="core-badge">CORE 1.14</span>
+      </div>
 
-      <nav class="nav-links">
-        <a href="#features">Imkoniyatlar</a>
-        <a href="#configurator">Konfigurator</a>
-        <a href="#quickstart">O‘rnatish</a>
+      <nav class="side-nav" id="sideNav">
+        <button class="nav-item active" data-tab="dashboard" type="button">⚡ Boshqaruv</button>
+        <button class="nav-item" data-tab="servers" type="button">🌐 Serverlar</button>
+        <button class="nav-item" data-tab="routing" type="button">🛡️ Marshrut</button>
+        <button class="nav-item" data-tab="config" type="button">🧩 Konfigurator</button>
+        <button class="nav-item" data-tab="settings" type="button">⚙️ Sozlama</button>
       </nav>
 
-      <div class="header-actions">
-        <button class="btn btn-purple" id="installBtn" type="button">📲 Shortcut / O‘rnatish</button>
-        <a class="btn btn-glass" href="https://github.com/muhammadiyorovsardor01-hue/zed-ray" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      <div class="side-footer">
+        <button class="bridge-chip" id="sideBridgeChip" type="button">
+          <span class="bridge-dot"></span>
+          <span id="sideBridgeText">Avtonom rejim</span>
+        </button>
+        <button class="install-side-btn" id="installSideBtn" type="button">📲 Ilovani o‘rnatish</button>
       </div>
-    </div>
-  </header>
+    </aside>
 
-  <main>
-    <!-- HERO SECTION -->
-    <section class="hero">
-      <div class="container hero-grid">
-        <div>
-          <div class="eyebrow">
-            <span class="eyebrow-dot"></span>
-            <span>Windows uchun Sing-box 1.14.4 VPN &amp; Proksi Mijozi</span>
+    <!-- MAIN APP AREA -->
+    <div class="app-main">
+      <header class="top-bar">
+        <div class="top-left">
+          <div class="mobile-brand">
+            <span class="brand-icon" style="width:30px;height:30px;border-radius:8px;" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <polygon points="14,2 6,13 12,13 10,22 19,10 13,10" fill="#FFFFFF"/>
+              </svg>
+            </span>
+            <span class="brand-title" style="font-size:17px;">ZedRay</span>
+            <span class="core-badge">CORE 1.14</span>
           </div>
-          <h1>Uzilishlarsiz <span class="grad-text">VLESS Reality</span> va Cloudflare WS+TLS himoyasi</h1>
-          <p class="hero-sub">
-            ZedRay PRO — Windows uchun maxsus ishlab chiqilgan yengil va tezkor VPN mijozi. WebSocket + TLS (ALPN), Smart Auto zaxira serverga o‘tish va jonli tunnel tekshiruvi bilan internet uzilib qolmaydi.
-          </p>
-
-          <div class="cap-pills">
-            <span class="cap-pill">⚡ Sing-box 1.14.4</span>
-            <span class="cap-pill">🛡️ VLESS Reality + WS/TLS</span>
-            <span class="cap-pill">🔄 Smart Auto Failover</span>
-            <span class="cap-pill">🌐 System Proxy &amp; TUN</span>
-          </div>
-
-          <div class="hero-ctas">
-            <a class="btn btn-primary" href="https://github.com/muhammadiyorovsardor01-hue/zed-ray" target="_blank" rel="noopener noreferrer">⬇ GitHub’dan olish</a>
-            <button class="btn btn-purple" id="heroInstallBtn" type="button">🖥 Shortcut sifatida o‘rnatish</button>
-            <a class="btn btn-glass" href="#configurator">⚙ VLESS Konfigurator</a>
-          </div>
+          <div class="view-title" id="topViewTitle">Boshqaruv</div>
         </div>
 
-        <!-- INTERACTIVE ZEDRAY PREVIEW CARD -->
-        <div class="preview-shell" aria-label="ZedRay PRO Interfeys Namunasi">
-          <div class="preview-top">
-            <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;">
-              <span>ZedRay</span>
-              <span class="core-pill">CORE 1.14</span>
-            </div>
-            <div class="status-pill" id="simStatusPill">
-              <span class="status-dot"></span>
-              <span id="simStatusText">O‘CHIRILGAN</span>
-            </div>
+        <div class="top-right">
+          <div class="status-pill" id="headerStatusPill">
+            <span class="status-dot"></span>
+            <span id="headerStatusText">O‘CHIRILGAN</span>
           </div>
+          <span class="top-mode-pill" id="topModePill">PROXY</span>
+          <button class="top-icon-btn" id="installTopBtn" type="button">📲 O‘rnatish</button>
+        </div>
+      </header>
 
-          <div class="sim-sec-card" id="simSecCard">
-            <div>
-              <div class="sim-sec-title" id="simSecTitle">HIMOYA O‘CHIRILGAN</div>
-              <div class="sim-sec-sub" id="simSecSub">Sinash uchun tugmani bosing · MTU 1400</div>
-            </div>
-            <button class="mode-switch-btn" id="simModeBtn" type="button">SYSTEM PROXY</button>
-          </div>
+      <!-- NARROW / MOBILE SEGMENTED NAV -->
+      <div class="compact-nav-wrap">
+        <nav class="compact-nav" id="compactNav">
+          <button class="active" data-tab="dashboard" type="button">⚡ Boshqaruv</button>
+          <button data-tab="servers" type="button">🌐 Serverlar</button>
+          <button data-tab="routing" type="button">🛡️ Marshrut</button>
+          <button data-tab="config" type="button">🧩 Config</button>
+          <button data-tab="settings" type="button">⚙️ Sozlama</button>
+        </nav>
+      </div>
 
-          <div class="power-zone">
-            <div class="power-ring" id="simRing">
-              <button class="power-btn" id="simPowerBtn" type="button">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                  <polygon points="14,2 6,13 12,13 10,22 19,10 13,10" fill="currentColor"/>
-                </svg>
-                <span class="power-label" id="simPowerLabel">ULASH</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="sim-timer" id="simTimer">00:00:00</div>
-
-          <div class="sim-net-card">
-            <div class="sim-speeds">
+      <!-- TAB VIEWS -->
+      <div class="views-host">
+        <!-- 1. DASHBOARD -->
+        <section class="tab-view active" id="tab-dashboard">
+          <div class="dash-stack">
+            <div class="card sec-card" id="secCard">
               <div>
-                <div class="spd-lbl dl">↓ YUKLAB OLISH</div>
-                <div class="spd-val" id="simDl">0.0 MB/s</div>
+                <div class="sec-title" id="secTitleText">HIMOYA O‘CHIRILGAN</div>
+                <div class="sec-sub" id="secSubText">Tarmoq ochiq · Ulash uchun pastdagi tugmani bosing</div>
               </div>
-              <div>
-                <div class="spd-lbl ul">↑ UZATISH</div>
-                <div class="spd-val" id="simUl">0.0 MB/s</div>
+              <button class="mode-badge" id="dashModeBadge" type="button">SYSTEM PROXY</button>
+            </div>
+
+            <div class="power-stage">
+              <div class="power-ring" id="powerRing">
+                <button class="power-core" id="powerBtn" type="button">
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                    <polygon points="14,2 6,13 12,13 10,22 19,10 13,10" fill="currentColor"/>
+                  </svg>
+                  <span class="power-lbl" id="powerBtnLabel">ULASH</span>
+                </button>
               </div>
-            </div>
-            <canvas id="simCanvas" width="380" height="52"></canvas>
-          </div>
-
-          <div class="sim-server-row" id="simServerRow" title="Server rejimini almashtirish">
-            <div>
-              <div class="sim-srv-name" id="simSrvName">⚡ Auto · VLESS WS+TLS Node</div>
-              <div class="sim-srv-meta" id="simSrvMeta">Smart Auto Failover · HTTP/1.1 ALPN</div>
-            </div>
-            <span class="mode-switch-btn">Almashtirish →</span>
-          </div>
-          <div class="sim-hint">Interaktiv namuna — ulanish animatsiyasini tekshirish uchun ⚡ tugmasini bosing</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FEATURES SECTION -->
-    <section class="block" id="features">
-      <div class="container">
-        <div class="sec-head">
-          <div>
-            <h2>Asosiy Texnik Imkoniyatlar</h2>
-            <p>ZedRay’dagi barcha ulanish muammolari tubdan qayta ishlanib, zamonaviy `sing-box 1.14.4` arxitekturasiga o‘tkazildi.</p>
-          </div>
-        </div>
-
-        <div class="feat-grid">
-          <article class="feat-card">
-            <div class="feat-icon">🚀</div>
-            <h3>Sing-box 1.14.4 yadrosi</h3>
-            <p>Yangi avlod DoH (`type: "https"`), `hijack-dns`, `sniff` rule actionlari va `default_domain_resolver` bilan xatosiz ishlaydi.</p>
-          </article>
-          <article class="feat-card">
-            <div class="feat-icon">☁️</div>
-            <h3>VLESS Reality + WS/TLS + ALPN</h3>
-            <p>Reality TCP bilan birga Cloudflare CDN (`WS + TLS`, `/cdn-ws`, `Host`, `alpn: ["http/1.1"]`, `?ed=`) serverlarini to‘liq qo‘llab-quvvatlaydi.</p>
-          </article>
-          <article class="feat-card">
-            <div class="feat-icon">🔁</div>
-            <h3>Smart Auto Failover</h3>
-            <p>Ulanishdan oldin `127.0.0.1:20807` porti va jonli tunnel (`generate_204`) tekshiriladi. Bitta server javob bermasa avtomatik keyingisiga o‘tadi.</p>
-          </article>
-          <article class="feat-card">
-            <div class="feat-icon">🛡️</div>
-            <h3>System Proxy &amp; TUN (WinTun)</h3>
-            <p>WinINet (`InternetSetOption`) orqali proksi bir zumda kuchga kiradi; TUN rejimi esa Administrator huquqini avtomatik so‘rab butun tizimni qamraydi.</p>
-          </article>
-          <article class="feat-card">
-            <div class="feat-icon">🩺</div>
-            <h3>Watchdog &amp; MTU 1400</h3>
-            <p>Har 6 soniyada tunnel salomatligi nazorat qilinadi. 1400 MTU paketlar maydalanishini kamaytiradi, uzilsa avtomatik qayta ulanadi.</p>
-          </article>
-          <article class="feat-card">
-            <div class="feat-icon">🔒</div>
-            <h3>Zero Secret Leakage</h3>
-            <p>Shaxsiy server IP, UUID va obuna havolalaringiz faqat o‘z kompyuteringizda qoladi. Konfigurator esa 100% brauzer ichida ishlaydi.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- INTERACTIVE VLESS CONFIGURATOR -->
-    <section class="block" id="configurator">
-      <div class="container">
-        <div class="sec-head">
-          <div>
-            <h2>VLESS → Sing-box 1.14.4 Konfigurator</h2>
-            <p>Istalgan `vless://...` havolasini kiriting — brauzeringizning o‘zida (hech qayerga yubormasdan) tayyor `sing-box 1.14.4` JSON konfiguratsiyasini oling.</p>
-          </div>
-        </div>
-
-        <div class="cfg-panel">
-          <div>
-            <div class="field-label">
-              <span>VLESS Havola (vless://...)</span>
-              <span style="color:var(--muted);font-weight:600;">100% Lokal tahlil</span>
-            </div>
-            <textarea class="vless-box" id="vlessInput" placeholder="vless://uuid@host:443?security=tls&amp;type=ws&amp;path=%2Fcdn-ws&amp;host=cdn.example.com&amp;sni=cdn.example.com&amp;alpn=http%2F1.1#Server"></textarea>
-
-            <div class="cfg-toolbar">
-              <button class="btn btn-primary" id="sampleBtn" type="button">✨ Namuna qo‘yish</button>
-              <button class="btn btn-glass" id="clearBtn" type="button">✕ Tozalash</button>
+              <div class="timer-readout" id="timerText">00:00:00</div>
             </div>
 
-            <div class="opt-grid">
-              <div class="opt-group">
-                <div class="opt-title">ULANISH REJIMI</div>
-                <div class="seg" id="modeSeg">
-                  <button type="button" data-val="system_proxy" class="active">System Proxy</button>
-                  <button type="button" data-val="tun">TUN Rejimi</button>
+            <div class="card">
+              <div class="net-grid">
+                <div>
+                  <div class="net-lbl dl">↓ YUKLAB OLISH</div>
+                  <div class="net-val" id="speedDown">0.0 MB/s</div>
+                </div>
+                <div>
+                  <div class="net-lbl ul">↑ UZATISH</div>
+                  <div class="net-val" id="speedUp">0.0 MB/s</div>
                 </div>
               </div>
-              <div class="opt-group">
-                <div class="opt-title">MARSHRUTLASH</div>
-                <div class="seg" id="routeSeg">
-                  <button type="button" data-val="rule" class="active">Smart Bypass</button>
-                  <button type="button" data-val="global">Global Tunnel</button>
+              <canvas id="speedCanvas" width="440" height="52"></canvas>
+            </div>
+
+            <div class="active-srv-card" id="activeServerCard">
+              <div class="srv-left">
+                <div class="flag-box" id="activeFlagBox"></div>
+                <div style="min-width:0;">
+                  <div class="srv-name" id="activeServerName">Server tanlanmagan</div>
+                  <div class="srv-meta" id="activeServerMeta">Serverlar bo‘limidan VLESS link qo‘shing</div>
                 </div>
               </div>
-              <div class="opt-group" style="grid-column: 1 / -1;">
-                <div class="opt-title">OPTIMAL MTU HAJMI</div>
-                <select class="mtu-select" id="mtuSelect">
-                  <option value="1400" selected>1400 (Optimal · Tavsiya)</option>
-                  <option value="1280">1280 (Mobil / Sekin tarmoq)</option>
-                  <option value="1500">1500 (Standart provayder)</option>
-                </select>
+              <span class="switch-tag">Almashtirish →</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. SERVERS -->
+        <section class="tab-view" id="tab-servers">
+          <div class="sub-banner">
+            <div class="sub-top">
+              <div>
+                <div class="sub-title" id="subTitleText">Obuna qo‘shilmagan</div>
+                <div class="sub-meta" id="subMetaText">Boshlash uchun «+ Qo‘shish» ni bosing</div>
+              </div>
+              <div class="sub-btns">
+                <button class="pill-btn pill-dark" id="btnSyncSub" type="button"><span class="spin-icon">🔄</span> Yangilash</button>
+                <button class="pill-btn pill-cyan" id="btnOpenAdd" type="button">+ Qo‘shish</button>
+                <button class="pill-btn pill-red" id="btnDelSub" type="button" style="display:none;" title="Obunani o'chirish">🗑</button>
               </div>
             </div>
-
-            <div class="parsed-badges" id="parsedBadges"></div>
-            <div class="cfg-error" id="cfgError"></div>
-          </div>
-
-          <div class="json-wrap">
-            <div class="field-label">
-              <span>Sing-box 1.14.4 Konfiguratsiyasi</span>
-              <div style="display:flex;gap:8px;">
-                <button class="btn btn-glass" id="copyJsonBtn" type="button" style="padding:6px 11px;font-size:12px;">📋 Nusxalash</button>
-                <button class="btn btn-primary" id="downloadJsonBtn" type="button" style="padding:6px 11px;font-size:12px;">⬇ config.json</button>
+            <div id="subQuotaWrap" style="display:none;">
+              <div class="progress-track"><div class="progress-fill" id="subProgressFill"></div></div>
+              <div class="sub-stats">
+                <span id="subUsageText" style="color:#CBD5E1;"></span>
+                <span id="subDaysText" style="color:var(--green);"></span>
               </div>
             </div>
-            <pre class="json-out" id="jsonOutput"></pre>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- QUICKSTART & SHORTCUT GUIDE -->
-    <section class="block" id="quickstart">
-      <div class="container">
-        <div class="sec-head">
-          <div>
-            <h2>Tezkor Boshlash va Shortcut Qilish</h2>
-            <p>Desktop ilovani ham, ushbu veb-saytni ham ish stolingizga bitta bosish bilan ochiladigan yorliq (shortcut) qilib oling.</p>
+          <div class="search-row">
+            <input class="search-input" id="searchBox" type="text" placeholder="🔍 Server nomi yoki manzil bo‘yicha qidirish..." autocomplete="off">
+            <button class="pill-btn pill-dark" id="btnPingAll" type="button">⚡ Ping Test</button>
           </div>
-        </div>
 
-        <div class="guide-grid">
-          <article class="guide-card">
-            <span class="step-num">1-QADAM · WINDOWS ILOVA</span>
-            <h3>ZedRay.exe ni ishga tushirish</h3>
-            <p>Ish stolingizdagi <code>ZedRay</code> yorlig‘ini oching. Agar kompyuteringizda Hiddify yoqilgan bo‘lsa, avval uni o‘chiring.</p>
-            <ul>
-              <li>Oddiy brauzer va Telegram uchun <strong>System Proxy</strong> yetarli.</li>
-              <li>Barcha dastur va o‘yinlar uchun <strong>Sozlama → TUN Rejimi</strong>ni tanlang (Admin ruxsati so‘raydi).</li>
-            </ul>
-          </article>
+          <div class="auto-card selected" id="autoSelectCard" style="display:none;">
+            <div class="bolt-badge">⚡</div>
+            <div>
+              <div style="font-size:12.5px;font-weight:800;">Avtomatik · Eng Tez Server (Smart Auto)</div>
+              <div style="font-size:10.5px;color:var(--muted);">Eng past pingli serverga ulanadi, uzilsa zaxira serverga o‘tadi</div>
+            </div>
+          </div>
 
-          <article class="guide-card">
-            <span class="step-num">2-QADAM · CHROME / EDGE</span>
-            <h3>Saytni Windows Shortcut qilish</h3>
-            <p>Ushbu saytni alohida mustaqil ilova oynasidek saqlab qo‘yishingiz mumkin:</p>
-            <ul>
-              <li>Yuqoridagi <strong>📲 Shortcut / O‘rnatish</strong> tugmasini bosing.</li>
-              <li>Yoki brauzerda <code>⋮ → Cast, save, and share → Create shortcut</code> / <code>Install app</code> ni tanlang.</li>
-            </ul>
-          </article>
+          <div class="server-list" id="serversList"></div>
+        </section>
 
-          <article class="guide-card">
-            <span class="step-num">3-QADAM · MOBIL TELEFON</span>
-            <h3>Android / iPhone ekraniga qo‘shish</h3>
-            <p>Saytni GitHub Pages yoki Vercel orqali ochganda telefoningizda PWA sifatida o‘rnatiladi:</p>
-            <ul>
-              <li><strong>Android (Chrome):</strong> <code>⋮ → Add to Home screen / Install app</code>.</li>
-              <li><strong>iPhone (Safari):</strong> Ulashish belgisi → <code>Add to Home Screen</code>.</li>
-            </ul>
-          </article>
-        </div>
-      </div>
-    </section>
-  </main>
+        <!-- 3. ROUTING -->
+        <section class="tab-view" id="tab-routing">
+          <div class="sec-caption">Marshrutlash Rejimlari (Routing Mode)</div>
 
-  <footer>
-    <div class="container footer-inner">
-      <div>
-        <strong>ZedRay PRO VPN</strong> · Core: <a href="https://sing-box.sagernet.org/" target="_blank" rel="noopener noreferrer" style="color:var(--cyan);">sing-box 1.14.4</a> ·
-        <a href="https://github.com/muhammadiyorovsardor01-hue/zed-ray" target="_blank" rel="noopener noreferrer" style="color:var(--muted);text-decoration:underline;">GitHub Repozitoriy</a>
-      </div>
-      <div class="zero-badge">🔒 Zero Secret Leakage · Shaxsiy ma’lumotlar brauzerdan chiqmaydi</div>
-    </div>
-  </footer>
+          <div class="choice-card selected" id="routeSmartCard">
+            <div class="choice-top">
+              <div class="choice-title">🎯 Smart Bypass (Aqlli Marshrut)</div>
+              <span class="tag-pill tag-green">TAVSIYA ETILADI</span>
+            </div>
+            <div class="choice-desc">
+              Lokal tarmoq (192.168.x.x, 127.0.0.1) va VPN serverining o‘z IP manzili to‘g‘ridan-to‘g‘ri (Direct) ulanadi. Faqat tashqi saytlar VLESS tunnel orqali o‘tadi va «Routing Loop» yuz bermaydi.
+            </div>
+          </div>
 
-  <!-- PWA / SHORTCUT INSTALL MODAL -->
-  <div class="modal-backdrop" id="installModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal-card">
-      <div class="modal-top">
-        <h3 id="modalTitle">📲 Saytni Shortcut Qilish</h3>
-        <button class="btn btn-glass" id="closeModalBtn" type="button" style="padding:6px 10px;font-size:12px;">✕ Yopish</button>
-      </div>
-      <div class="modal-step">
-        <strong>1. Windows (Chrome / Edge):</strong>
-        Yuqori o‘ng burchakdagi <code>⋮</code> menyuni bosing → <code>Cast, save, and share</code> → <code>Create shortcut...</code> (yoki manzil satridagi O‘rnatish belgisini bosing) va <em>Open as window</em> ni belgilang.
-      </div>
-      <div class="modal-step">
-        <strong>2. Android / iPhone:</strong>
-        Sayt <code>https://</code> manzilda ochilganda brauzer menyusidan <code>Add to Home Screen</code> / <code>Install app</code> tugmasini bosing — asosiy ekranda ZedRay belgisi bilan paydo bo‘ladi.
-      </div>
-      <div class="modal-step" style="margin-bottom:0;">
-        <strong>3. Tayyor ish stoli yorlig‘i:</strong>
-        Windows ish stolida <code>ZedRay</code> (ilova) va <code>ZedRay Sayt</code> yorliqlari allaqachon yaratib qo‘yilgan.
+          <div class="choice-card" id="routeGlobalCard">
+            <div class="choice-top">
+              <div class="choice-title">🌐 Global Tunnel (100% Proksi)</div>
+              <span class="tag-pill tag-purple">TO‘LIQ PROKSI</span>
+            </div>
+            <div class="choice-desc">
+              Tizimning barcha tashqi internet trafigi istisnosiz VLESS serveri orqali yo‘naltiriladi. IP manzilni to‘liq yashirish zarur bo‘lganda qo‘llaniladi.
+            </div>
+          </div>
+
+          <div class="info-box">
+            <strong style="color:var(--cyan);display:block;margin-bottom:5px;">💡 Anti-Loop va DoH DNS Himoyasi</strong>
+            • Server IP manzili avtomatik ravishda <code>direct</code> qoidasiga qo‘shiladi.<br>
+            • DNS so‘rovlari <code>1.1.1.1/dns-query</code> (DoH) orqali shifrlangan holda tunnel ichidan o‘tadi (`hijack-dns`).
+          </div>
+        </section>
+
+        <!-- 4. CONFIGURATOR -->
+        <section class="tab-view" id="tab-config">
+          <div class="card" style="margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+              <span style="font-size:12.5px;font-weight:800;color:var(--cyan);">Sing-box 1.14.4 JSON Konfigurator</span>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="pill-btn pill-dark" id="btnLoadSelectedCfg" type="button">⬇ Tanlangan server</button>
+                <button class="pill-btn pill-cyan" id="btnSampleCfg" type="button">✨ Namuna</button>
+                <button class="pill-btn pill-dark" id="btnClearCfg" type="button">✕ Tozalash</button>
+              </div>
+            </div>
+            <textarea class="vless-area" id="cfgVlessInput" placeholder="vless://uuid@host:443?security=tls&amp;type=ws&amp;path=%2Fcdn-ws&amp;host=cdn.example.com&amp;sni=cdn.example.com&amp;alpn=http%2F1.1#Server"></textarea>
+            <div class="badges-row" id="cfgParsedBadges"></div>
+            <div class="err-banner" id="cfgErrBanner"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:8px;">
+              <span style="font-size:11px;color:var(--muted);">100% brauzer ichida ishlaydi · Faol rejim va MTU ishlatiladi</span>
+              <div style="display:flex;gap:6px;">
+                <button class="pill-btn pill-dark" id="btnCopyJson" type="button">📋 Nusxalash</button>
+                <button class="pill-btn pill-cyan" id="btnDownloadJson" type="button">⬇ config.json</button>
+              </div>
+            </div>
+            <pre class="json-pre" id="cfgJsonOut"></pre>
+          </div>
+        </section>
+
+        <!-- 5. SETTINGS -->
+        <section class="tab-view" id="tab-settings">
+          <div class="sec-caption">Dastur va Tarmoq Sozlamalari</div>
+
+          <div class="card" style="margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:800;margin-bottom:8px;">1. Ulanish Rejimi (Traffic Redirection)</div>
+
+            <div class="choice-card selected" id="modeProxyCard">
+              <div class="choice-top">
+                <div class="choice-title">⚡ System Proxy (127.0.0.1:20807)</div>
+                <span class="tag-pill tag-cyan">ADMINSIZ / TEZKOR</span>
+              </div>
+              <div class="choice-desc">Windows tizim proksisi orqali ulaydi. Brauzerlar va Telegram darhol ishlaydi, Administrator huquqi talab etilmaydi.</div>
+            </div>
+
+            <div class="choice-card" id="modeTunCard" style="margin-bottom:0;">
+              <div class="choice-top">
+                <div class="choice-title">🛡️ TUN Rejimi (WinTun Virtual Adapter)</div>
+                <span class="tag-pill tag-purple">TO‘LIQ TIZIM / ADMIN</span>
+              </div>
+              <div class="choice-desc">Virtual tarmoq adapteri orqali barcha dasturlar, o‘yinlar va terminal trafigini to‘liq qamrab oladi.</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:800;margin-bottom:10px;">2. Barqarorlik va MTU</div>
+            <label class="chk-row" style="margin-bottom:10px;">
+              <input type="checkbox" id="chkWatchdog" checked>
+              <span>Auto-Reconnect Watchdog (Uzilganda avtomatik qayta ulash)</span>
+            </label>
+            <div class="setting-row">
+              <span style="font-size:12.5px;font-weight:700;">Optimal MTU Hajmi:</span>
+              <select class="select-box" id="cmbMtu">
+                <option value="1400">1400 (Optimal · Tavsiya)</option>
+                <option value="1280">1280 (Mobil / Sekin tarmoq)</option>
+                <option value="1500">1500 (Standart provayder)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="setting-row" style="margin-bottom:6px;">
+              <span style="font-size:13px;font-weight:800;">3. Lokal Yadro (Desktop Bridge)</span>
+              <button class="pill-btn pill-dark" id="btnRecheckBridge" type="button">🔄 Qayta tekshirish</button>
+            </div>
+            <div id="bridgeDetailText" style="font-size:12px;color:var(--muted);line-height:1.5;"></div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 
+  <!-- ADD SERVER / SUBSCRIPTION MODAL -->
+  <div class="modal-overlay" id="addModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Server yoki Obuna Qo‘shish</h3>
+        <button class="pill-btn pill-red" id="btnCloseAddModal" type="button">✕ Yopish</button>
+      </div>
+
+      <label class="modal-lbl" for="txtVlessLink" style="color:var(--cyan);">1. VLESS Havolasi (vless://...):</label>
+      <textarea class="modal-input" id="txtVlessLink" rows="3" placeholder="vless://..."></textarea>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button class="pill-btn pill-dark" id="btnPasteVless" type="button">📋 Paste</button>
+        <button class="pill-btn pill-cyan" id="btnSaveVless" type="button">✓ Serverni Saqlash</button>
+      </div>
+
+      <label class="modal-lbl" for="txtSubUrl" style="color:var(--purple);">2. Yoki Obuna Havolasi (Subscription URL):</label>
+      <input class="modal-input" id="txtSubUrl" type="text" placeholder="https://...">
+      <input class="modal-input" id="txtSubName" type="text" placeholder="Obuna nomi (ixtiyoriy)">
+      <div style="display:flex;gap:8px;">
+        <button class="pill-btn pill-dark" id="btnPasteSub" type="button">📋 Paste URL</button>
+        <button class="pill-btn pill-purple" id="btnSaveSub" type="button">🔄 Obunani Yuklash</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PWA INSTALL / SHORTCUT MODAL -->
+  <div class="modal-overlay" id="installModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>📲 Ilova Sifatida O‘rnatish</h3>
+        <button class="pill-btn pill-red" id="btnCloseInstallModal" type="button">✕ Yopish</button>
+      </div>
+      <div class="guide-step">
+        <strong>1. Windows (Chrome / Edge):</strong>
+        Manzil satridagi o‘rnatish belgisini bosing yoki <code>⋮ → Cast, save, and share → Create shortcut...</code> da <em>Open as window</em> ni belgilab saqlang.
+      </div>
+      <div class="guide-step" style="margin-bottom:0;">
+        <strong>2. Android / iPhone:</strong>
+        Brauzer menyusidan <code>Install app</code> / <code>Add to Home Screen</code> ni tanlang — mustaqil ilova ko‘rinishida ochiladi.
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toastBox"></div>
+
   <script>
-    // ================= 1. INTERACTIVE DASHBOARD PREVIEW =================
-    const simPowerBtn = document.getElementById('simPowerBtn');
-    const simPowerLabel = document.getElementById('simPowerLabel');
-    const simRing = document.getElementById('simRing');
-    const simStatusPill = document.getElementById('simStatusPill');
-    const simStatusText = document.getElementById('simStatusText');
-    const simSecCard = document.getElementById('simSecCard');
-    const simSecTitle = document.getElementById('simSecTitle');
-    const simSecSub = document.getElementById('simSecSub');
-    const simTimer = document.getElementById('simTimer');
-    const simDl = document.getElementById('simDl');
-    const simUl = document.getElementById('simUl');
-    const simModeBtn = document.getElementById('simModeBtn');
-    const simServerRow = document.getElementById('simServerRow');
-    const simSrvName = document.getElementById('simSrvName');
-    const simSrvMeta = document.getElementById('simSrvMeta');
-    const simCanvas = document.getElementById('simCanvas');
-    const sCtx = simCanvas.getContext('2d');
-
-    let simState = 'off'; // 'off' | 'connecting' | 'on'
-    let simMode = 'SYSTEM PROXY';
-    let simSeconds = 0;
-    let simHistory = Array(30).fill(0);
-    let simTicks = null;
-    let simSrvIdx = 0;
-    const simServers = [
-      { name: '⚡ Auto · VLESS WS+TLS Node', meta: 'Smart Auto Failover · HTTP/1.1 ALPN', sec: 'WS+TLS' },
-      { name: '🛡️ VLESS Reality Node', meta: 'TCP · uTLS Chrome · Smart Bypass', sec: 'REALITY' }
-    ];
-
-    function pad2(n) { return String(n).padStart(2, '0'); }
-    function drawSimGraph() {
-      const w = simCanvas.width;
-      const h = simCanvas.height;
-      sCtx.clearRect(0, 0, w, h);
-      const max = Math.max(24, ...simHistory);
-      const step = w / (simHistory.length - 1);
-
-      sCtx.beginPath();
-      simHistory.forEach((v, i) => {
-        const x = i * step;
-        const y = h - (v / max) * (h - 10) - 4;
-        if (i === 0) sCtx.moveTo(x, y);
-        else sCtx.lineTo(x, y);
-      });
-      sCtx.strokeStyle = '#00F2FE';
-      sCtx.lineWidth = 2.2;
-      sCtx.stroke();
-
-      sCtx.lineTo(w, h);
-      sCtx.lineTo(0, h);
-      sCtx.closePath();
-      const grad = sCtx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, 'rgba(0, 242, 254, 0.28)');
-      grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
-      sCtx.fillStyle = grad;
-      sCtx.fill();
-    }
-
-    function renderSim() {
-      simStatusPill.className = 'status-pill' + (simState === 'on' ? ' connected' : (simState === 'connecting' ? ' connecting' : ''));
-      simRing.className = 'power-ring' + (simState === 'on' ? ' connected' : (simState === 'connecting' ? ' connecting' : ''));
-      simPowerBtn.className = 'power-btn' + (simState === 'on' ? ' connected' : (simState === 'connecting' ? ' connecting' : ''));
-      simSecCard.className = 'sim-sec-card' + (simState === 'on' ? ' connected' : '');
-
-      if (simState === 'on') {
-        simStatusText.textContent = 'HIMOYALANGAN';
-        simPowerLabel.textContent = 'UZISH';
-        simSecTitle.textContent = 'HIMOYA YOQILGAN · VLESS ' + simServers[simSrvIdx].sec;
-        simSecSub.textContent = 'Shifrlangan tunnel faol · MTU 1400';
-      } else if (simState === 'connecting') {
-        simStatusText.textContent = 'ULANMOQDA...';
-        simPowerLabel.textContent = 'KUTING...';
-        simSecTitle.textContent = 'TUNNEL TEKSHIRILMOQDA...';
-        simSecSub.textContent = '127.0.0.1:20807 · Jonli proksi sinovi';
-      } else {
-        simStatusText.textContent = 'O‘CHIRILGAN';
-        simPowerLabel.textContent = 'ULASH';
-        simSecTitle.textContent = 'HIMOYA O‘CHIRILGAN';
-        simSecSub.textContent = 'Sinash uchun tugmani bosing · MTU 1400';
-        simSeconds = 0;
-        simTimer.textContent = '00:00:00';
-        simDl.textContent = '0.0 MB/s';
-        simUl.textContent = '0.0 MB/s';
-        simHistory = Array(30).fill(0);
-      }
-      drawSimGraph();
-    }
-
-    simPowerBtn.addEventListener('click', () => {
-      if (simState === 'on' || simState === 'connecting') {
-        simState = 'off';
-        if (simTicks) { clearInterval(simTicks); simTicks = null; }
-        renderSim();
-        return;
-      }
-      simState = 'connecting';
-      renderSim();
-      setTimeout(() => {
-        if (simState !== 'connecting') return;
-        simState = 'on';
-        simSeconds = 0;
-        renderSim();
-        if (simTicks) clearInterval(simTicks);
-        simTicks = setInterval(() => {
-          simSeconds++;
-          const hh = Math.floor(simSeconds / 3600);
-          const mm = Math.floor((simSeconds % 3600) / 60);
-          const ss = simSeconds % 60;
-          simTimer.textContent = `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
-          const dl = (Math.random() * 14 + 6.5).toFixed(1);
-          const ul = (Math.random() * 3.8 + 1.1).toFixed(1);
-          simDl.textContent = `${dl} MB/s`;
-          simUl.textContent = `${ul} MB/s`;
-          simHistory.shift();
-          simHistory.push(parseFloat(dl));
-          drawSimGraph();
-        }, 1000);
-      }, 900);
-    });
-
-    simModeBtn.addEventListener('click', () => {
-      simMode = simMode === 'SYSTEM PROXY' ? 'TUN (ADMIN)' : 'SYSTEM PROXY';
-      simModeBtn.textContent = simMode;
-    });
-
-    simServerRow.addEventListener('click', () => {
-      simSrvIdx = (simSrvIdx + 1) % simServers.length;
-      simSrvName.textContent = simServers[simSrvIdx].name;
-      simSrvMeta.textContent = simServers[simSrvIdx].meta;
-      renderSim();
-    });
-    renderSim();
-
-    // ================= 2. VLESS -> SING-BOX 1.14.4 CONFIGURATOR =================
+    const BRIDGE_BASE = 'http://127.0.0.1:4040';
+    const STORAGE_KEY = 'zedray_pwa_state_v1';
     const SAMPLE_VLESS = 'vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls&type=ws&path=%2Fcdn-ws&host=cdn.example.com&sni=cdn.example.com&fp=chrome&alpn=http%2F1.1#Example%20WS%20Node';
-    const vlessInput = document.getElementById('vlessInput');
-    const jsonOutput = document.getElementById('jsonOutput');
-    const parsedBadges = document.getElementById('parsedBadges');
-    const cfgError = document.getElementById('cfgError');
-    const mtuSelect = document.getElementById('mtuSelect');
-    let cfgMode = 'system_proxy';
-    let cfgRoute = 'rule';
 
+    const state = {
+      bridgeOnline: false,
+      status: 'disconnected', // 'disconnected' | 'connecting' | 'connected'
+      activeServer: null,
+      connectTime: 0,
+      duration: 0,
+      servers: [],
+      subscription: { name: '', url: '', usedGb: 0, totalGb: 0, daysLeft: 0 },
+      settings: {
+        mode: 'system_proxy',
+        mtu: 1400,
+        routingMode: 'rule',
+        autoReconnect: true,
+        selectedServerId: 'auto'
+      },
+      speedHistory: Array(32).fill(0)
+    };
+
+    let deferredPrompt = null;
+    let currentTab = 'dashboard';
+    let toastTimer = null;
+
+    function showToast(msg) {
+      const box = document.getElementById('toastBox');
+      box.textContent = msg;
+      box.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => box.classList.remove('show'), 2600);
+    }
+
+    function loadLocalState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.servers)) state.servers = parsed.servers;
+        if (parsed.subscription) state.subscription = { ...state.subscription, ...parsed.subscription };
+        if (parsed.settings) state.settings = { ...state.settings, ...parsed.settings };
+      } catch {}
+    }
+
+    function saveLocalState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          servers: state.servers,
+          subscription: state.subscription,
+          settings: state.settings
+        }));
+      } catch {}
+    }
+
+    // ================= FLAG VECTOR RENDERER =================
+    function detectCountryCode(name) {
+      const l = String(name || '').toLowerCase();
+      if (l.includes('hong') || l.includes('hk')) return 'HK';
+      if (l.includes('germ') || l.includes('frank') || /\bde\b/.test(l)) return 'DE';
+      if (l.includes('united states') || l.includes('usa') || l.includes('amer') || /\bus\b/.test(l)) return 'US';
+      if (l.includes('sing') || /\bsg\b/.test(l)) return 'SG';
+      if (l.includes('jap') || /\bjp\b/.test(l)) return 'JP';
+      if (l.includes('russ') || l.includes('mosc') || /\bru\b/.test(l)) return 'RU';
+      if (l.includes('uzbek') || /\buz\b/.test(l)) return 'UZ';
+      if (l.includes('euro') || /\beu\b/.test(l)) return 'EU';
+      return 'GL';
+    }
+
+    function renderFlagSvg(codeOrName) {
+      const c = String(codeOrName || '').toUpperCase();
+      if (c.includes('HK') || c.includes('HONG')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="24" fill="#DE2910"/><circle cx="18" cy="12" r="5" fill="#FFF"/></svg>';
+      }
+      if (c.includes('EU') || c.includes('EURO')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="24" fill="#003399"/><circle cx="18" cy="12" r="6.5" fill="none" stroke="#FFCC00" stroke-width="2" stroke-dasharray="1.8 2"/></svg>';
+      }
+      if (c.includes('DE') || c.includes('GERM')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="8" fill="#000"/><rect y="8" width="36" height="8" fill="#DD0000"/><rect y="16" width="36" height="8" fill="#FFCE00"/></svg>';
+      }
+      if (c.includes('US') || c.includes('AMER')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="24" fill="#B22234"/><rect y="4" width="36" height="4" fill="#FFF"/><rect y="12" width="36" height="4" fill="#FFF"/><rect y="20" width="36" height="4" fill="#FFF"/><rect width="16" height="13" fill="#3C3B6E"/></svg>';
+      }
+      if (c.includes('SG') || c.includes('SING')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="12" fill="#EF3340"/><rect y="12" width="36" height="12" fill="#FFF"/></svg>';
+      }
+      if (c.includes('JP') || c.includes('JAP')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="24" fill="#FFF"/><circle cx="18" cy="12" r="6" fill="#BC002D"/></svg>';
+      }
+      if (c.includes('RU') || c.includes('RUSS')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="8" fill="#FFF"/><rect y="8" width="36" height="8" fill="#0039A6"/><rect y="16" width="36" height="8" fill="#D52B1E"/></svg>';
+      }
+      if (c.includes('UZ')) {
+        return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="8" fill="#0099B5"/><rect y="8" width="36" height="8" fill="#FFF"/><rect y="16" width="36" height="8" fill="#1EB53A"/></svg>';
+      }
+      return '<svg viewBox="0 0 36 24" width="38" height="26"><rect width="36" height="24" fill="#0F2942"/><circle cx="18" cy="12" r="6.5" fill="none" stroke="#00F2FE" stroke-width="1.6"/></svg>';
+    }
+
+    // ================= VLESS PARSER & SING-BOX 1.14.4 BUILDER =================
     function isIpAddress(host) {
       return /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(':');
     }
 
-    function parseVless(link) {
-      const trimmed = (link || '').trim();
-      if (!trimmed.toLowerCase().startsWith('vless://')) {
-        throw new Error("Havola 'vless://' bilan boshlanishi kerak.");
-      }
-      const url = new URL(trimmed);
-      const uuid = decodeURIComponent(url.username || '');
-      const host = (url.hostname || '').replace(/^\[|\]$/g, '');
-      const port = parseInt(url.port, 10) || 443;
-      if (!uuid || !host) {
-        throw new Error("VLESS havolada UUID yoki server manzili topilmadi.");
-      }
-      const p = Object.fromEntries(url.searchParams.entries());
-      const net = (p.type || 'tcp').toLowerCase();
-      const pbk = p.pbk || '';
-      const sec = (p.security || (pbk ? 'reality' : 'none')).toLowerCase();
-      const wsHost = p.host || '';
-      const sni = p.sni || wsHost || host;
-      const fp = p.fp || 'chrome';
-      const sid = p.sid || '';
-      const flow = p.flow || '';
-      const rawPath = p.path || p.serviceName || '';
-      const alpn = p.alpn || (net === 'ws' && sec === 'tls' ? 'http/1.1' : '');
-      const name = url.hash ? decodeURIComponent(url.hash.slice(1)) : `${host}:${port}`;
+    function parseVlessUrl(link) {
+      const trimmed = String(link || '').trim();
+      if (!trimmed.toLowerCase().startsWith('vless://')) return null;
+      try {
+        const url = new URL(trimmed);
+        const uuid = decodeURIComponent(url.username || '');
+        const host = (url.hostname || '').replace(/^\[|\]$/g, '');
+        const port = parseInt(url.port, 10) || 443;
+        if (!uuid || !host) return null;
 
-      return { name, uuid, host, port, net, sec, wsHost, sni, fp, pbk, sid, flow, rawPath, alpn };
+        const q = Object.fromEntries(url.searchParams.entries());
+        const net = (q.type || 'tcp').toLowerCase();
+        const pbk = q.pbk || '';
+        const sec = (q.security || (pbk ? 'reality' : 'none')).toLowerCase();
+        const wsHost = q.host || '';
+        const sni = q.sni || wsHost || host;
+        const fp = q.fp || 'chrome';
+        const sid = q.sid || '';
+        const flow = q.flow || '';
+        const rawPath = q.path || '';
+        const serviceName = q.serviceName || '';
+        const alpn = q.alpn || (net === 'ws' && sec === 'tls' ? 'http/1.1' : '');
+        const name = url.hash ? decodeURIComponent(url.hash.slice(1)).trim() : `${host}:${port}`;
+
+        return {
+          id: 'srv_' + Math.random().toString(36).slice(2, 10),
+          name,
+          country: detectCountryCode(name),
+          server: host,
+          server_port: port,
+          uuid,
+          network: net,
+          security: sec,
+          sni,
+          fingerprint: fp,
+          public_key: pbk,
+          short_id: sid,
+          flow,
+          path: rawPath,
+          wsHost,
+          serviceName,
+          alpn,
+          raw_link: trimmed,
+          ping: 0,
+          source: 'manual'
+        };
+      } catch {
+        return null;
+      }
     }
 
-    function buildSingbox114(srv) {
-      const mtu = parseInt(mtuSelect.value, 10) || 1400;
+    function serverToVlessUrl(s) {
+      if (!s) return '';
+      if (s.raw_link) return s.raw_link;
+      const params = new URLSearchParams();
+      params.set('type', s.network || 'tcp');
+      if (s.security) params.set('security', s.security);
+      const sni = s.sni || (s.tls && s.tls.server_name) || '';
+      if (sni) params.set('sni', sni);
+      const fp = s.fingerprint || (s.tls && s.tls.utls && s.tls.utls.fingerprint) || 'chrome';
+      if (fp) params.set('fp', fp);
+      const pbk = s.public_key || (s.tls && s.tls.reality && s.tls.reality.public_key) || '';
+      const sid = s.short_id || (s.tls && s.tls.reality && s.tls.reality.short_id) || '';
+      if (pbk) params.set('pbk', pbk);
+      if (sid) params.set('sid', sid);
+      if (s.flow) params.set('flow', s.flow);
+      const trPath = s.path || (s.transport && s.transport.path) || '';
+      const trHost = s.wsHost || (s.transport && s.transport.headers && s.transport.headers.Host) || '';
+      if (trPath) params.set('path', trPath);
+      if (trHost) params.set('host', trHost);
+      const alpn = s.alpn || (s.tls && Array.isArray(s.tls.alpn) ? s.tls.alpn.join(',') : '');
+      if (alpn) params.set('alpn', alpn);
+      return `vless://${encodeURIComponent(s.uuid)}@${s.server}:${s.server_port}?${params.toString()}#${encodeURIComponent(s.name || s.server)}`;
+    }
+
+    function buildSingbox114Config(srv) {
+      const mode = state.settings.mode || 'system_proxy';
+      const mtu = parseInt(state.settings.mtu, 10) || 1400;
+      const routing = state.settings.routingMode || 'rule';
+
       const inbounds = [
         { type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: 20807 }
       ];
-      if (cfgMode === 'tun') {
+      if (mode === 'tun') {
         inbounds.push({
           type: 'tun',
           tag: 'tun-in',
@@ -1182,35 +1301,36 @@
       const proxy = {
         type: 'vless',
         tag: 'proxy',
-        server: srv.host,
-        server_port: srv.port,
+        server: srv.server,
+        server_port: srv.server_port,
         uuid: srv.uuid,
         packet_encoding: 'xudp'
       };
       if (srv.flow) proxy.flow = srv.flow;
 
-      if (srv.sec === 'reality') {
+      if (srv.security === 'reality') {
         proxy.tls = {
           enabled: true,
-          server_name: srv.sni,
-          utls: { enabled: true, fingerprint: srv.fp },
-          reality: { enabled: true, public_key: srv.pbk, short_id: srv.sid }
+          server_name: srv.sni || srv.server,
+          utls: { enabled: true, fingerprint: srv.fingerprint || 'chrome' },
+          reality: { enabled: true, public_key: srv.public_key || '', short_id: srv.short_id || '' }
         };
-      } else if (srv.sec === 'tls') {
-        const alpnArr = srv.alpn.split(',').map(x => x.trim()).filter(Boolean);
+      } else if (srv.security === 'tls') {
+        const alpnList = String(srv.alpn || '').split(',').map(x => x.trim()).filter(Boolean);
         proxy.tls = {
           enabled: true,
-          server_name: srv.sni,
-          utls: { enabled: true, fingerprint: srv.fp }
+          server_name: srv.sni || srv.wsHost || srv.server,
+          utls: { enabled: true, fingerprint: srv.fingerprint || 'chrome' }
         };
-        if (alpnArr.length) proxy.tls.alpn = alpnArr;
+        if (alpnList.length) proxy.tls.alpn = alpnList;
+        else if (srv.network === 'ws') proxy.tls.alpn = ['http/1.1'];
       }
 
-      if (srv.net === 'ws') {
-        const raw = srv.rawPath || '/';
+      if (srv.network === 'ws') {
+        const raw = srv.path || '/';
         const edMatch = raw.match(/[?&]ed=(\d+)/i);
         const cleanPath = raw.replace(/[?&]ed=\d+/i, '') || '/';
-        const hostHdr = srv.wsHost || srv.sni || srv.host;
+        const hostHdr = srv.wsHost || srv.sni || srv.server;
         proxy.transport = {
           type: 'ws',
           path: cleanPath,
@@ -1220,21 +1340,21 @@
           proxy.transport.max_early_data = parseInt(edMatch[1], 10);
           proxy.transport.early_data_header_name = 'Sec-WebSocket-Protocol';
         }
-      } else if (srv.net === 'grpc') {
-        proxy.transport = { type: 'grpc', service_name: srv.rawPath || '' };
-      } else if (srv.net === 'httpupgrade') {
+      } else if (srv.network === 'grpc') {
+        proxy.transport = { type: 'grpc', service_name: srv.serviceName || srv.path || '' };
+      } else if (srv.network === 'httpupgrade') {
         proxy.transport = {
           type: 'httpupgrade',
-          host: srv.wsHost || srv.sni || srv.host,
-          path: srv.rawPath || '/'
+          host: srv.wsHost || srv.sni || srv.server,
+          path: srv.path || '/'
         };
       }
 
-      const bypassRule = isIpAddress(srv.host)
-        ? { ip_cidr: [`${srv.host}/${srv.host.includes(':') ? 128 : 32}`], outbound: 'direct' }
-        : { domain: [srv.host], outbound: 'direct' };
+      const bypassRule = isIpAddress(srv.server)
+        ? { ip_cidr: [`${srv.server}/${srv.server.includes(':') ? 128 : 32}`], outbound: 'direct' }
+        : { domain: [srv.server], outbound: 'direct' };
 
-      const routeTail = cfgRoute === 'rule'
+      const routeTail = routing === 'rule'
         ? { ip_is_private: true, outbound: 'direct' }
         : { ip_cidr: ['127.0.0.0/8', '::1/128'], outbound: 'direct' };
 
@@ -1264,82 +1384,722 @@
       };
     }
 
-    function updateConfigurator() {
-      const val = vlessInput.value.trim();
-      parsedBadges.innerHTML = '';
-      if (!val) {
-        cfgError.style.display = 'none';
-        jsonOutput.textContent = '// VLESS havolani kiriting yoki "Namuna qo‘yish" tugmasini bosing';
-        return;
-      }
+    // ================= BRIDGE API (127.0.0.1:4040) =================
+    async function bridgeFetch(path, options = {}, timeoutMs = 1500) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const srv = parseVless(val);
-        cfgError.style.display = 'none';
-        const items = [
-          ['Host', `${srv.host}:${srv.port}`],
-          ['Network', srv.net.toUpperCase()],
-          ['Security', srv.sec.toUpperCase()],
-          ['SNI', srv.sni],
-          ['ALPN', srv.alpn || '—'],
-          ['Path', srv.rawPath || '—']
-        ];
-        items.forEach(([k, v]) => {
-          const span = document.createElement('span');
-          span.className = 'p-badge';
-          span.innerHTML = `${k}: <b></b>`;
-          span.querySelector('b').textContent = v;
-          parsedBadges.appendChild(span);
+        const res = await fetch(`${BRIDGE_BASE}${path}`, {
+          ...options,
+          signal: controller.signal
         });
-        jsonOutput.textContent = JSON.stringify(buildSingbox114(srv), null, 2);
-      } catch (err) {
-        cfgError.textContent = err.message;
-        cfgError.style.display = 'block';
-        jsonOutput.textContent = '// Xatolik: to‘g‘ri VLESS havolasini kiriting';
+        return await res.json();
+      } finally {
+        clearTimeout(id);
       }
     }
 
-    document.getElementById('sampleBtn').addEventListener('click', () => {
-      vlessInput.value = SAMPLE_VLESS;
-      updateConfigurator();
-    });
-    document.getElementById('clearBtn').addEventListener('click', () => {
-      vlessInput.value = '';
-      updateConfigurator();
-    });
-    vlessInput.addEventListener('input', updateConfigurator);
-    mtuSelect.addEventListener('change', updateConfigurator);
+    function normalizeBridgeServer(s) {
+      return {
+        id: s.id,
+        name: s.name || s.server,
+        country: s.country || detectCountryCode(s.name),
+        server: s.server,
+        server_port: s.server_port || 443,
+        uuid: s.uuid || '',
+        network: s.network || 'tcp',
+        security: s.security || 'reality',
+        sni: s.sni || (s.tls && s.tls.server_name) || s.server,
+        fingerprint: (s.tls && s.tls.utls && s.tls.utls.fingerprint) || 'chrome',
+        public_key: (s.tls && s.tls.reality && s.tls.reality.public_key) || '',
+        short_id: (s.tls && s.tls.reality && s.tls.reality.short_id) || '',
+        flow: s.flow || '',
+        path: (s.transport && s.transport.path) || '',
+        wsHost: (s.transport && s.transport.headers && s.transport.headers.Host) || '',
+        serviceName: (s.transport && s.transport.service_name) || '',
+        alpn: (s.tls && Array.isArray(s.tls.alpn)) ? s.tls.alpn.join(',') : '',
+        raw_link: s.raw_link || '',
+        ping: typeof s.ping === 'number' ? s.ping : 0,
+        source: s.source || 'manual'
+      };
+    }
 
-    document.querySelectorAll('#modeSeg button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#modeSeg button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        cfgMode = btn.dataset.val;
-        updateConfigurator();
-      });
-    });
-    document.querySelectorAll('#routeSeg button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#routeSeg button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        cfgRoute = btn.dataset.val;
-        updateConfigurator();
-      });
-    });
-
-    const copyBtn = document.getElementById('copyJsonBtn');
-    copyBtn.addEventListener('click', async () => {
-      if (!jsonOutput.textContent.trim().startsWith('{')) return;
+    async function probeBridge(quiet = true) {
       try {
-        await navigator.clipboard.writeText(jsonOutput.textContent);
-        const orig = copyBtn.textContent;
-        copyBtn.textContent = '✓ Nusxalandi!';
-        setTimeout(() => { copyBtn.textContent = orig; }, 1600);
+        const st = await bridgeFetch('/api/status', {}, 1200);
+        const wasOffline = !state.bridgeOnline;
+        state.bridgeOnline = true;
+        state.status = st.status === 'connected' ? 'connected' : (st.status === 'connecting' ? 'connecting' : 'disconnected');
+        state.activeServer = st.activeServer ? normalizeBridgeServer(st.activeServer) : null;
+        if (typeof st.duration === 'number') state.duration = st.duration;
+        if (st.settings) {
+          state.settings.mode = st.settings.mode || state.settings.mode;
+          state.settings.mtu = st.settings.mtu || state.settings.mtu;
+          state.settings.routingMode = st.settings.routingMode || state.settings.routingMode;
+          state.settings.autoReconnect = st.settings.autoReconnect !== false;
+          if (st.settings.selectedServerId) state.settings.selectedServerId = st.settings.selectedServerId;
+        }
+        if (wasOffline) {
+          await syncServersFromBridge();
+          if (!quiet) showToast('Lokal Sing-box yadrosiga ulandi!');
+        }
+        renderAll();
+        return true;
+      } catch {
+        const wasOnline = state.bridgeOnline;
+        state.bridgeOnline = false;
+        if (wasOnline) {
+          state.status = 'disconnected';
+          state.activeServer = null;
+        }
+        renderBridgeUI();
+        if (!quiet) showToast('Lokal yadro (127.0.0.1:4040) topilmadi. Avtonom rejim faol.');
+        return false;
+      }
+    }
+
+    async function syncServersFromBridge() {
+      try {
+        const data = await bridgeFetch('/api/servers', {}, 2500);
+        if (Array.isArray(data.servers)) {
+          state.servers = data.servers.map(normalizeBridgeServer);
+        }
+        if (data.subscription) {
+          state.subscription = {
+            name: data.subscription.name || '',
+            url: data.subscription.url || '',
+            usedGb: parseFloat(data.subscription.usedGb) || 0,
+            totalGb: parseFloat(data.subscription.totalGb) || 0,
+            daysLeft: parseInt(data.subscription.daysLeft, 10) || 0
+          };
+        }
+        if (data.selectedServerId) state.settings.selectedServerId = data.selectedServerId;
+        renderAll();
+      } catch {}
+    }
+
+    // ================= TAB NAVIGATION =================
+    const TAB_TITLES = {
+      dashboard: 'Boshqaruv',
+      servers: 'Serverlar',
+      routing: 'Marshrut',
+      config: 'Sing-box 1.14.4 Konfigurator',
+      settings: 'Sozlama'
+    };
+
+    function switchTab(tabId) {
+      if (!TAB_TITLES[tabId]) tabId = 'dashboard';
+      currentTab = tabId;
+      document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById('tab-' + tabId);
+      if (target) target.classList.add('active');
+
+      document.querySelectorAll('#sideNav button, #compactNav button').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tabId);
+      });
+      document.getElementById('topViewTitle').textContent = TAB_TITLES[tabId];
+      if (tabId === 'config' && !document.getElementById('cfgVlessInput').value.trim()) {
+        const srv = getTargetServer();
+        if (srv) {
+          document.getElementById('cfgVlessInput').value = serverToVlessUrl(srv);
+        } else {
+          document.getElementById('cfgVlessInput').value = SAMPLE_VLESS;
+        }
+        updateConfigurator();
+      }
+    }
+
+    document.querySelectorAll('#sideNav button, #compactNav button').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    // ================= SERVER & CONNECTION LOGIC =================
+    function getTargetServer() {
+      if (!state.servers.length) return null;
+      const sel = state.settings.selectedServerId;
+      if (!sel || sel === 'auto') {
+        const reachable = state.servers.filter(s => s.ping > 0).sort((a, b) => a.ping - b.ping);
+        return reachable[0] || state.servers[0];
+      }
+      return state.servers.find(s => s.id === sel) || state.servers[0];
+    }
+
+    async function toggleConnection() {
+      if (state.status === 'connected' || state.status === 'connecting') {
+        await disconnectVpn();
+      } else {
+        await connectVpn();
+      }
+    }
+
+    async function connectVpn() {
+      const target = getTargetServer();
+      if (!target) {
+        showToast('Avval server yoki obuna qo‘shing.');
+        switchTab('servers');
+        document.getElementById('addModal').classList.add('open');
+        return;
+      }
+
+      state.status = 'connecting';
+      state.activeServer = target;
+      renderConnectionUI();
+
+      if (state.bridgeOnline) {
+        try {
+          const res = await bridgeFetch('/api/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serverId: state.settings.selectedServerId || 'auto' })
+          }, 12000);
+          if (res.success) {
+            state.status = 'connected';
+            state.activeServer = res.activeServer ? normalizeBridgeServer(res.activeServer) : target;
+            state.duration = 0;
+            state.connectTime = Date.now();
+            showToast('VPN muvaffaqiyatli ulandi!');
+          } else {
+            state.status = 'disconnected';
+            state.activeServer = null;
+            showToast(res.error || 'Ulanish xatosi');
+          }
+        } catch (err) {
+          state.bridgeOnline = false;
+          state.status = 'disconnected';
+          showToast('Lokal yadro bilan aloqa uzildi.');
+        }
+        renderAll();
+        return;
+      }
+
+      // Standalone Web App Mode simulation
+      setTimeout(() => {
+        if (state.status !== 'connecting') return;
+        state.status = 'connected';
+        state.activeServer = target;
+        state.duration = 0;
+        state.connectTime = Date.now();
+        renderAll();
+      }, 650);
+    }
+
+    async function disconnectVpn() {
+      if (state.bridgeOnline) {
+        try {
+          await bridgeFetch('/api/disconnect', { method: 'POST' }, 5000);
+        } catch {}
+      }
+      state.status = 'disconnected';
+      state.activeServer = null;
+      state.duration = 0;
+      state.speedHistory = Array(32).fill(0);
+      renderAll();
+    }
+
+    async function selectServer(id) {
+      state.settings.selectedServerId = id;
+      saveLocalState();
+      if (state.bridgeOnline) {
+        try {
+          await bridgeFetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectedServerId: id })
+          }, 2500);
+        } catch {}
+      }
+      renderAll();
+      if (state.status === 'connected') {
+        await disconnectVpn();
+        await connectVpn();
+      }
+    }
+
+    async function deleteServer(id) {
+      state.servers = state.servers.filter(s => s.id !== id);
+      if (state.settings.selectedServerId === id) {
+        state.settings.selectedServerId = state.servers.length > 1 ? 'auto' : (state.servers[0] ? state.servers[0].id : 'auto');
+      }
+      saveLocalState();
+      if (state.bridgeOnline) {
+        try {
+          await bridgeFetch(`/api/servers/${encodeURIComponent(id)}`, { method: 'DELETE' }, 3000);
+        } catch {}
+      }
+      renderAll();
+    }
+
+    async function deleteSubscription() {
+      const subCount = state.servers.filter(s => s.source === 'subscription').length;
+      if (!confirm(`«${state.subscription.name || 'Obuna'}» va undagi ${subCount} ta server o‘chirilsinmi?`)) return;
+
+      if (state.status !== 'disconnected' && (!state.activeServer || state.activeServer.source === 'subscription')) {
+        await disconnectVpn();
+      }
+
+      const toDelete = state.servers.filter(s => s.source === 'subscription').map(s => s.id);
+      state.servers = state.servers.filter(s => s.source !== 'subscription');
+      state.subscription = { name: '', url: '', usedGb: 0, totalGb: 0, daysLeft: 0 };
+      if (state.settings.selectedServerId !== 'auto' && !state.servers.some(s => s.id === state.settings.selectedServerId)) {
+        state.settings.selectedServerId = state.servers[0] ? state.servers[0].id : 'auto';
+      }
+      saveLocalState();
+      if (state.bridgeOnline) {
+        for (const id of toDelete) {
+          try { await bridgeFetch(`/api/servers/${encodeURIComponent(id)}`, { method: 'DELETE' }, 2000); } catch {}
+        }
+      }
+      renderAll();
+      showToast('Obuna o‘chirildi.');
+    }
+
+    async function syncSubscription(urlOverride = '', nameOverride = '') {
+      const btn = document.getElementById('btnSyncSub');
+      btn.classList.add('spinning');
+      try {
+        const subUrl = (urlOverride || state.subscription.url || '').trim();
+        if (!subUrl) {
+          await pingAllServers();
+          return;
+        }
+        const subName = nameOverride || state.subscription.name || 'MultiCo VPN';
+
+        if (state.bridgeOnline) {
+          const res = await bridgeFetch('/api/subscription/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: subUrl, name: subName })
+          }, 20000);
+          if (res.success && Array.isArray(res.servers)) {
+            state.servers = res.servers.map(normalizeBridgeServer);
+            if (res.subscription) {
+              state.subscription = {
+                name: res.subscription.name || subName,
+                url: res.subscription.url || subUrl,
+                usedGb: parseFloat(res.subscription.usedGb) || 0,
+                totalGb: parseFloat(res.subscription.totalGb) || 0,
+                daysLeft: parseInt(res.subscription.daysLeft, 10) || 0
+              };
+            }
+            renderAll();
+            showToast(`${state.servers.length} ta server yangilandi!`);
+          } else {
+            showToast(res.error || 'Obunani yuklab bo‘lmadi');
+          }
+          return;
+        }
+
+        // Direct browser fetch fallback (works when server allows CORS)
+        const resp = await fetch(subUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        let raw = (await resp.text()).trim();
+        if (!raw.includes('://')) {
+          try { raw = decodeURIComponent(escape(atob(raw))); } catch { raw = atob(raw); }
+        }
+        const parsed = [];
+        for (const line of raw.split(/\r?\n/)) {
+          const item = parseVlessUrl(line);
+          if (item) {
+            item.source = 'subscription';
+            parsed.push(item);
+          }
+        }
+        if (!parsed.length) throw new Error('Obunadan VLESS server topilmadi');
+        const manual = state.servers.filter(s => s.source !== 'subscription');
+        state.servers = [...parsed, ...manual];
+        state.subscription = { name: subName, url: subUrl, usedGb: 0, totalGb: 0, daysLeft: 0 };
+        if (state.servers.length > 1) state.settings.selectedServerId = 'auto';
+        else state.settings.selectedServerId = state.servers[0].id;
+        saveLocalState();
+        renderAll();
+        showToast(`${parsed.length} ta server yuklandi!`);
+      } catch (err) {
+        showToast('Obunani brauzerdan yuklab bo‘lmadi (CORS yoki tarmoq). VLESS link qo‘shing yoki ZedRay.bat yoqing.');
+      } finally {
+        btn.classList.remove('spinning');
+      }
+    }
+
+    async function pingAllServers() {
+      if (state.bridgeOnline) {
+        try {
+          const data = await bridgeFetch('/api/ping', { method: 'POST' }, 15000);
+          if (Array.isArray(data.servers)) {
+            state.servers = data.servers.map(normalizeBridgeServer);
+            renderAll();
+            showToast('Ping testi yakunlandi.');
+            return;
+          }
+        } catch {}
+      }
+      if (!state.servers.length) {
+        showToast('Tekshirish uchun server yo‘q.');
+        return;
+      }
+      showToast('Haqiqiy TCP ping uchun ZedRay.exe yoki ZedRay.bat (127.0.0.1:4040) kerak.');
+    }
+
+    async function updateSetting(partial) {
+      state.settings = { ...state.settings, ...partial };
+      saveLocalState();
+      if (state.bridgeOnline) {
+        try {
+          await bridgeFetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(partial)
+          }, 2500);
+        } catch {}
+      }
+      renderAll();
+    }
+
+    // ================= RENDERING =================
+    function renderBridgeUI() {
+      const chip = document.getElementById('sideBridgeChip');
+      const sideText = document.getElementById('sideBridgeText');
+      const detail = document.getElementById('bridgeDetailText');
+
+      chip.classList.toggle('online', state.bridgeOnline);
+      if (state.bridgeOnline) {
+        sideText.textContent = 'Yadro ulandi (4040)';
+        detail.innerHTML = '<strong style="color:var(--green);">🟢 Ulangan (http://127.0.0.1:4040)</strong><br>Barcha ulanish, ping va tizim proksi amallari to‘g‘ridan-to‘g‘ri Windows <code>sing-box 1.14.4</code> yadrosi orqali ishlayapti.';
+      } else {
+        sideText.textContent = 'Avtonom rejim';
+        detail.innerHTML = '<strong style="color:var(--amber);">🟡 Avtonom rejim (Lokal bridge o‘chiq)</strong><br>Sozlamalar va serverlar brauzerda saqlanadi. Ushbu oynadan haqiqiy VPN yoqish uchun <code>ZedRay.bat</code> ni ishga tushiring yoki <code>ZedRay.exe</code> ilovasidan foydalaning.';
+      }
+    }
+
+    function renderConnectionUI() {
+      const pill = document.getElementById('headerStatusPill');
+      const pText = document.getElementById('headerStatusText');
+      const secCard = document.getElementById('secCard');
+      const secTitle = document.getElementById('secTitleText');
+      const secSub = document.getElementById('secSubText');
+      const ring = document.getElementById('powerRing');
+      const pBtn = document.getElementById('powerBtn');
+      const pLbl = document.getElementById('powerBtnLabel');
+
+      const cls = state.status === 'connected' ? 'connected' : (state.status === 'connecting' ? 'connecting' : '');
+      pill.className = 'status-pill ' + cls;
+      secCard.className = 'card sec-card ' + cls;
+      ring.className = 'power-ring ' + cls;
+      pBtn.className = 'power-core ' + cls;
+
+      const modeStr = state.settings.mode === 'tun' ? 'TUN (TO‘LIQ VPN)' : 'SYSTEM PROXY';
+      document.getElementById('dashModeBadge').textContent = modeStr;
+      document.getElementById('topModePill').textContent = state.settings.mode === 'tun' ? 'TUN' : 'PROXY';
+
+      if (state.status === 'connected') {
+        const sec = (state.activeServer && state.activeServer.security ? state.activeServer.security : 'TLS').toUpperCase();
+        pText.textContent = state.bridgeOnline ? 'HIMOYALANGAN' : 'AVTONOM REJIM';
+        secTitle.textContent = state.bridgeOnline ? `HIMOYA YOQILGAN · VLESS ${sec}` : `NAMUNA FAOL · VLESS ${sec}`;
+        const hostTxt = state.activeServer ? state.activeServer.server : 'Faol';
+        secSub.textContent = state.bridgeOnline
+          ? `Shifrlangan kanal: ${hostTxt} · MTU ${state.settings.mtu}`
+          : `Avtonom rejim (${hostTxt}) · Haqiqiy tunnel uchun ZedRay.exe yoki ZedRay.bat yoqing`;
+        pLbl.textContent = 'UZISH';
+      } else if (state.status === 'connecting') {
+        pText.textContent = 'ULANMOQDA...';
+        secTitle.textContent = 'TUNNEL OCHILMOQDA...';
+        secSub.textContent = state.bridgeOnline ? 'Sing-box 1.14.4 ishga tushmoqda...' : 'Avtonom ulanish...';
+        pLbl.textContent = 'KUTING...';
+      } else {
+        pText.textContent = 'O‘CHIRILGAN';
+        secTitle.textContent = 'HIMOYA O‘CHIRILGAN';
+        secSub.textContent = 'Tarmoq ochiq · Ulash uchun pastdagi tugmani bosing';
+        pLbl.textContent = 'ULASH';
+        document.getElementById('timerText').textContent = '00:00:00';
+        document.getElementById('speedDown').textContent = '0.0 MB/s';
+        document.getElementById('speedUp').textContent = '0.0 MB/s';
+      }
+    }
+
+    function renderActivePreview() {
+      const srv = state.activeServer || getTargetServer();
+      const flagBox = document.getElementById('activeFlagBox');
+      const nameEl = document.getElementById('activeServerName');
+      const metaEl = document.getElementById('activeServerMeta');
+
+      if (!srv) {
+        flagBox.innerHTML = renderFlagSvg('GL');
+        nameEl.textContent = 'Server tanlanmagan';
+        metaEl.textContent = 'Serverlar bo‘limidan VLESS link yoki obuna qo‘shing';
+        return;
+      }
+      flagBox.innerHTML = renderFlagSvg((srv.country || '') + ' ' + srv.name);
+      nameEl.textContent = state.settings.selectedServerId === 'auto' ? `Auto · ${srv.name}` : srv.name;
+      const pingTxt = srv.ping > 0 ? `${srv.ping} ms` : (srv.ping < 0 ? 'Timeout' : 'ping o‘lchanmagan');
+      metaEl.textContent = `VLESS · ${(srv.network || 'tcp').toUpperCase()} / ${(srv.security || 'reality').toUpperCase()} · ${pingTxt}`;
+    }
+
+    function renderServersTab() {
+      const hasSub = Boolean(state.subscription.url);
+      const hasQuota = hasSub && Number(state.subscription.totalGb) > 0;
+      const subTitle = document.getElementById('subTitleText');
+      const subMeta = document.getElementById('subMetaText');
+      const btnDelSub = document.getElementById('btnDelSub');
+      const quotaWrap = document.getElementById('subQuotaWrap');
+
+      if (hasSub) {
+        subTitle.textContent = state.subscription.name || 'Obuna';
+        const subCount = state.servers.filter(s => s.source === 'subscription').length;
+        subMeta.textContent = `${subCount} ta server obunadan`;
+        if (hasQuota) {
+          const used = Number(state.subscription.usedGb) || 0;
+          const tot = Number(state.subscription.totalGb) || 1;
+          document.getElementById('subUsageText').textContent = `${used.toFixed(2)} GB / ${tot.toFixed(0)} GB`;
+          document.getElementById('subDaysText').textContent = state.subscription.daysLeft > 0 ? `${state.subscription.daysLeft} kun qoldi` : 'Muddatsiz';
+          document.getElementById('subProgressFill').style.width = `${Math.min(100, Math.max(2, (used / tot) * 100))}%`;
+        }
+      } else {
+        subTitle.textContent = 'Obuna qo‘shilmagan';
+        subMeta.textContent = state.servers.length > 0 ? `${state.servers.length} ta server saqlangan` : 'Boshlash uchun «+ Qo‘shish» ni bosing';
+      }
+      btnDelSub.style.display = hasSub ? 'inline-flex' : 'none';
+      quotaWrap.style.display = hasQuota ? 'block' : 'none';
+
+      const autoCard = document.getElementById('autoSelectCard');
+      autoCard.style.display = state.servers.length > 1 ? 'flex' : 'none';
+      autoCard.classList.toggle('selected', state.settings.selectedServerId === 'auto');
+
+      const list = document.getElementById('serversList');
+      list.innerHTML = '';
+
+      if (!state.servers.length) {
+        const empty = document.createElement('div');
+        empty.className = 'card';
+        empty.style.textAlign = 'center';
+        empty.style.padding = '24px 16px';
+        empty.innerHTML = '<div style="font-size:14px;font-weight:800;margin-bottom:6px;">Hali server qo‘shilmagan</div><div style="font-size:12px;color:var(--muted);">Yuqoridagi «+ Qo‘shish» tugmasini bosing va <code>vless://</code> havolangizni yoki obuna URL’ingizni kiriting.</div>';
+        list.appendChild(empty);
+        return;
+      }
+
+      const q = (document.getElementById('searchBox').value || '').trim().toLowerCase();
+      state.servers.forEach(srv => {
+        if (q && !String(srv.name).toLowerCase().includes(q) && !String(srv.server).toLowerCase().includes(q)) return;
+
+        const row = document.createElement('div');
+        row.className = 'srv-item' + (state.settings.selectedServerId === srv.id ? ' selected' : '');
+
+        const left = document.createElement('div');
+        left.className = 'srv-left';
+        const fbox = document.createElement('div');
+        fbox.className = 'flag-box';
+        fbox.innerHTML = renderFlagSvg((srv.country || '') + ' ' + srv.name);
+
+        const info = document.createElement('div');
+        info.style.minWidth = '0';
+        const nm = document.createElement('div');
+        nm.className = 'srv-name';
+        nm.textContent = srv.name;
+        const mt = document.createElement('div');
+        mt.className = 'srv-meta';
+        mt.textContent = `VLESS · ${(srv.network || 'TCP').toUpperCase()} / ${(srv.security || 'REALITY').toUpperCase()} · ${srv.server}`;
+        info.appendChild(nm);
+        info.appendChild(mt);
+        left.appendChild(fbox);
+        left.appendChild(info);
+
+        const right = document.createElement('div');
+        right.className = 'srv-right';
+        const pingEl = document.createElement('span');
+        pingEl.className = 'ping-pill' + (srv.ping > 0 ? (srv.ping < 100 ? ' fast' : (srv.ping < 220 ? ' med' : ' slow')) : '');
+        pingEl.textContent = srv.ping > 0 ? `${srv.ping} ms` : (srv.ping < 0 ? 'Timeout' : '—');
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'del-btn';
+        delBtn.type = 'button';
+        delBtn.textContent = '✕';
+        delBtn.title = 'O‘chirish';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteServer(srv.id);
+        });
+
+        right.appendChild(pingEl);
+        right.appendChild(delBtn);
+        row.appendChild(left);
+        row.appendChild(right);
+        row.addEventListener('click', () => selectServer(srv.id));
+        list.appendChild(row);
+      });
+    }
+
+    function renderSettingsAndRouting() {
+      const isRule = state.settings.routingMode !== 'global';
+      document.getElementById('routeSmartCard').classList.toggle('selected', isRule);
+      document.getElementById('routeGlobalCard').classList.toggle('selected', !isRule);
+
+      const isTun = state.settings.mode === 'tun';
+      document.getElementById('modeProxyCard').classList.toggle('selected', !isTun);
+      document.getElementById('modeTunCard').classList.toggle('selected', isTun);
+      document.getElementById('chkWatchdog').checked = state.settings.autoReconnect !== false;
+      document.getElementById('cmbMtu').value = String(state.settings.mtu || 1400);
+    }
+
+    function renderAll() {
+      renderBridgeUI();
+      renderConnectionUI();
+      renderActivePreview();
+      renderServersTab();
+      renderSettingsAndRouting();
+      if (currentTab === 'config') updateConfigurator();
+    }
+
+    // ================= CONFIGURATOR =================
+    function updateConfigurator() {
+      const input = document.getElementById('cfgVlessInput').value.trim();
+      const badges = document.getElementById('cfgParsedBadges');
+      const errBanner = document.getElementById('cfgErrBanner');
+      const out = document.getElementById('cfgJsonOut');
+
+      badges.innerHTML = '';
+      if (!input) {
+        errBanner.style.display = 'none';
+        out.textContent = '// VLESS havolani kiriting yoki "Namuna" tugmasini bosing';
+        return;
+      }
+
+      const srv = parseVlessUrl(input);
+      if (!srv) {
+        errBanner.textContent = 'Havola noto‘g‘ri formatda (vless://uuid@host:port?... bo‘lishi kerak).';
+        errBanner.style.display = 'block';
+        out.textContent = '// Xato: to‘g‘ri VLESS havola kiriting';
+        return;
+      }
+
+      errBanner.style.display = 'none';
+      const meta = [
+        ['Host', `${srv.server}:${srv.server_port}`],
+        ['Network', srv.network.toUpperCase()],
+        ['Security', srv.security.toUpperCase()],
+        ['SNI', srv.sni || '—'],
+        ['ALPN', srv.alpn || '—'],
+        ['Path', srv.path || srv.serviceName || '—']
+      ];
+      meta.forEach(([k, v]) => {
+        const sp = document.createElement('span');
+        sp.className = 'meta-badge';
+        const b = document.createElement('b');
+        b.textContent = v;
+        sp.textContent = `${k}: `;
+        sp.appendChild(b);
+        badges.appendChild(sp);
+      });
+
+      out.textContent = JSON.stringify(buildSingbox114Config(srv), null, 2);
+    }
+
+    // ================= SPEED CHART & LIVE TIMER =================
+    const speedCanvas = document.getElementById('speedCanvas');
+    const sCtx = speedCanvas.getContext('2d');
+
+    function drawSpeedGraph() {
+      const w = speedCanvas.width;
+      const h = speedCanvas.height;
+      sCtx.clearRect(0, 0, w, h);
+      const max = Math.max(22, ...state.speedHistory);
+      const step = w / (state.speedHistory.length - 1);
+
+      sCtx.beginPath();
+      state.speedHistory.forEach((v, i) => {
+        const x = i * step;
+        const y = h - (v / max) * (h - 10) - 4;
+        if (i === 0) sCtx.moveTo(x, y);
+        else sCtx.lineTo(x, y);
+      });
+      sCtx.strokeStyle = '#00F2FE';
+      sCtx.lineWidth = 2.2;
+      sCtx.stroke();
+
+      sCtx.lineTo(w, h);
+      sCtx.lineTo(0, h);
+      sCtx.closePath();
+      const grad = sCtx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(0, 242, 254, 0.28)');
+      grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
+      sCtx.fillStyle = grad;
+      sCtx.fill();
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    setInterval(() => {
+      if (state.status === 'connected') {
+        state.duration++;
+        const hh = Math.floor(state.duration / 3600);
+        const mm = Math.floor((state.duration % 3600) / 60);
+        const ss = state.duration % 60;
+        document.getElementById('timerText').textContent = `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+        const dl = (Math.random() * 11 + 3.2).toFixed(1);
+        const ul = (Math.random() * 3.1 + 0.8).toFixed(1);
+        document.getElementById('speedDown').textContent = `${dl} MB/s`;
+        document.getElementById('speedUp').textContent = `${ul} MB/s`;
+        state.speedHistory.shift();
+        state.speedHistory.push(parseFloat(dl));
+      } else {
+        state.speedHistory.shift();
+        state.speedHistory.push(0);
+      }
+      drawSpeedGraph();
+    }, 1000);
+
+    setInterval(() => {
+      if (state.bridgeOnline || state.status === 'connected') {
+        probeBridge(true);
+      }
+    }, 4000);
+
+    // ================= EVENT HANDLERS =================
+    document.getElementById('powerBtn').addEventListener('click', toggleConnection);
+    document.getElementById('dashModeBadge').addEventListener('click', () => {
+      updateSetting({ mode: state.settings.mode === 'tun' ? 'system_proxy' : 'tun' });
+    });
+    document.getElementById('activeServerCard').addEventListener('click', () => switchTab('servers'));
+    document.getElementById('sideBridgeChip').addEventListener('click', () => switchTab('settings'));
+    document.getElementById('autoSelectCard').addEventListener('click', () => selectServer('auto'));
+    document.getElementById('searchBox').addEventListener('input', renderServersTab);
+    document.getElementById('btnPingAll').addEventListener('click', pingAllServers);
+    document.getElementById('btnSyncSub').addEventListener('click', () => syncSubscription());
+    document.getElementById('btnDelSub').addEventListener('click', deleteSubscription);
+
+    document.getElementById('routeSmartCard').addEventListener('click', () => updateSetting({ routingMode: 'rule' }));
+    document.getElementById('routeGlobalCard').addEventListener('click', () => updateSetting({ routingMode: 'global' }));
+    document.getElementById('modeProxyCard').addEventListener('click', () => updateSetting({ mode: 'system_proxy' }));
+    document.getElementById('modeTunCard').addEventListener('click', () => updateSetting({ mode: 'tun' }));
+    document.getElementById('chkWatchdog').addEventListener('change', (e) => updateSetting({ autoReconnect: e.target.checked }));
+    document.getElementById('cmbMtu').addEventListener('change', (e) => updateSetting({ mtu: parseInt(e.target.value, 10) || 1400 }));
+    document.getElementById('btnRecheckBridge').addEventListener('click', () => probeBridge(false));
+
+    // Configurator controls
+    document.getElementById('cfgVlessInput').addEventListener('input', updateConfigurator);
+    document.getElementById('btnSampleCfg').addEventListener('click', () => {
+      document.getElementById('cfgVlessInput').value = SAMPLE_VLESS;
+      updateConfigurator();
+    });
+    document.getElementById('btnClearCfg').addEventListener('click', () => {
+      document.getElementById('cfgVlessInput').value = '';
+      updateConfigurator();
+    });
+    document.getElementById('btnLoadSelectedCfg').addEventListener('click', () => {
+      const srv = getTargetServer();
+      if (!srv) { showToast('Avval server tanlang.'); return; }
+      document.getElementById('cfgVlessInput').value = serverToVlessUrl(srv);
+      updateConfigurator();
+    });
+    document.getElementById('btnCopyJson').addEventListener('click', async () => {
+      const txt = document.getElementById('cfgJsonOut').textContent;
+      if (!txt.trim().startsWith('{')) return;
+      try {
+        await navigator.clipboard.writeText(txt);
+        showToast('Konfiguratsiya nusxalandi!');
       } catch {}
     });
-
-    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
-      if (!jsonOutput.textContent.trim().startsWith('{')) return;
-      const blob = new Blob([jsonOutput.textContent], { type: 'application/json' });
+    document.getElementById('btnDownloadJson').addEventListener('click', () => {
+      const txt = document.getElementById('cfgJsonOut').textContent;
+      if (!txt.trim().startsWith('{')) return;
+      const blob = new Blob([txt], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1348,40 +2108,125 @@
       URL.revokeObjectURL(url);
     });
 
-    vlessInput.value = SAMPLE_VLESS;
-    updateConfigurator();
+    // Add Server / Subscription Modal
+    const addModal = document.getElementById('addModal');
+    document.getElementById('btnOpenAdd').addEventListener('click', () => {
+      document.getElementById('txtSubUrl').value = state.subscription.url || '';
+      document.getElementById('txtSubName').value = state.subscription.name || 'MultiCo VPN';
+      addModal.classList.add('open');
+    });
+    document.getElementById('btnCloseAddModal').addEventListener('click', () => addModal.classList.remove('open'));
+    addModal.addEventListener('click', (e) => { if (e.target === addModal) addModal.classList.remove('open'); });
 
-    // ================= 3. PWA SHORTCUT / INSTALL PROMPT =================
-    let deferredPrompt = null;
+    document.getElementById('btnPasteVless').addEventListener('click', async () => {
+      try { document.getElementById('txtVlessLink').value = (await navigator.clipboard.readText()).trim(); } catch {}
+    });
+    document.getElementById('btnPasteSub').addEventListener('click', async () => {
+      try { document.getElementById('txtSubUrl').value = (await navigator.clipboard.readText()).trim(); } catch {}
+    });
+
+    document.getElementById('btnSaveVless').addEventListener('click', async () => {
+      const link = document.getElementById('txtVlessLink').value.trim();
+      if (!link) return;
+      if (/^https?:\/\//i.test(link)) {
+        addModal.classList.remove('open');
+        document.getElementById('txtVlessLink').value = '';
+        await syncSubscription(link, 'MultiCo VPN');
+        return;
+      }
+      const parsed = parseVlessUrl(link);
+      if (!parsed) {
+        showToast('VLESS havola noto‘g‘ri formatda!');
+        return;
+      }
+      if (state.bridgeOnline) {
+        try {
+          const res = await bridgeFetch('/api/servers/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ link })
+          }, 5000);
+          if (res.success && res.server) {
+            await syncServersFromBridge();
+            state.settings.selectedServerId = res.server.id;
+          }
+        } catch {}
+      } else {
+        state.servers.unshift(parsed);
+        state.settings.selectedServerId = parsed.id;
+        saveLocalState();
+      }
+      document.getElementById('txtVlessLink').value = '';
+      addModal.classList.remove('open');
+      renderAll();
+      showToast('Server saqlandi!');
+    });
+
+    document.getElementById('btnSaveSub').addEventListener('click', async () => {
+      const u = document.getElementById('txtSubUrl').value.trim();
+      const n = document.getElementById('txtSubName').value.trim() || 'MultiCo VPN';
+      if (!/^https?:\/\//i.test(u)) {
+        showToast('Iltimos, to‘g‘ri obuna URL (https://...) kiriting.');
+        return;
+      }
+      addModal.classList.remove('open');
+      await syncSubscription(u, n);
+    });
+
+    // ================= PWA INSTALL & SERVICE WORKER =================
+    function syncStandaloneMode() {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      document.body.classList.toggle('is-standalone', isStandalone);
+    }
+    syncStandaloneMode();
+
     const installModal = document.getElementById('installModal');
-
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
     });
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      installModal.classList.remove('open');
+      syncStandaloneMode();
+    });
 
-    async function triggerInstall() {
+    async function handleInstallClick() {
       if (deferredPrompt) {
         deferredPrompt.prompt();
         await deferredPrompt.userChoice;
         deferredPrompt = null;
-      } else {
-        installModal.classList.add('open');
+        return;
       }
+      installModal.classList.add('open');
     }
 
-    document.getElementById('installBtn').addEventListener('click', triggerInstall);
-    document.getElementById('heroInstallBtn').addEventListener('click', triggerInstall);
-    document.getElementById('closeModalBtn').addEventListener('click', () => installModal.classList.remove('open'));
-    installModal.addEventListener('click', (e) => {
-      if (e.target === installModal) installModal.classList.remove('open');
-    });
+    document.getElementById('installSideBtn').addEventListener('click', handleInstallClick);
+    document.getElementById('installTopBtn').addEventListener('click', handleInstallClick);
+    document.getElementById('btnCloseInstallModal').addEventListener('click', () => installModal.classList.remove('open'));
+    installModal.addEventListener('click', (e) => { if (e.target === installModal) installModal.classList.remove('open'); });
 
     if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
+      let swRefreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (swRefreshing) return;
+        swRefreshing = true;
+        window.location.reload();
+      });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
+        navigator.serviceWorker.register('./sw.js')
+          .then((reg) => reg.update().catch(() => {}))
+          .catch(() => {});
       });
     }
+
+    // ================= BOOTSTRAP =================
+    loadLocalState();
+    const initialHash = (location.hash || '').replace('#', '').toLowerCase();
+    if (TAB_TITLES[initialHash]) switchTab(initialHash);
+    renderAll();
+    drawSpeedGraph();
+    probeBridge(true);
   </script>
 </body>
 </html>
