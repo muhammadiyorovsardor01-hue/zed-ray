@@ -1,30 +1,28 @@
 const dns = require('dns').promises;
+const net = require('net');
 
 /**
  * Resolves server host to an IP address if it's a domain name.
  */
 async function resolveHostToIp(host) {
-  // If host is already an IPv4 address
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+  if (net.isIP(host)) {
     return host;
   }
   try {
     const lookup = await dns.lookup(host, { family: 4 });
     return lookup.address;
   } catch {
-    return null;
+    try {
+      const lookup = await dns.lookup(host);
+      return lookup.address;
+    } catch {
+      return null;
+    }
   }
 }
 
 /**
- * Generates a sing-box 1.14+ compatible configuration.
- *
- * Migration notes (sing-box 1.10 -> 1.14):
- *  - tun `inet4_address`            -> `address` (array)
- *  - inbound `sniff`                -> route rule `{ action: "sniff" }`
- *  - `dns` / `block` outbounds      -> route rule action `hijack-dns` / `reject`
- *  - legacy DNS servers (`address`) -> typed servers (`type`, `server`)
- *  - dns rule `outbound: any`       -> `route.default_domain_resolver`
+ * Generates sing-box 1.14.4 compatible configuration.
  */
 async function generateSingboxConfig(server, options = {}) {
   const {
@@ -54,14 +52,16 @@ async function generateSingboxConfig(server, options = {}) {
       mtu: mtu,
       auto_route: true,
       strict_route: true,
-      stack: 'gvisor' // gvisor user-space stack is resilient against Windows sleep/wake drops
+      stack: 'gvisor'
     });
   }
 
-  // Outbound `network` only accepts "tcp" / "udp" (the transport type such as
-  // ws/grpc lives in `transport`), so never forward values like "ws" here.
-  const network = server.network === 'udp' ? 'udp' : undefined;
+  let tlsConfig = server.tls ? JSON.parse(JSON.stringify(server.tls)) : undefined;
+  if (tlsConfig && server.transport && server.transport.type === 'ws' && !tlsConfig.reality && (!tlsConfig.alpn || tlsConfig.alpn.length === 0)) {
+    tlsConfig.alpn = ['http/1.1'];
+  }
 
+  // Construct Outbound based on server type
   const proxyOutbound = {
     type: server.type || 'vless',
     tag: 'proxy',
@@ -69,8 +69,8 @@ async function generateSingboxConfig(server, options = {}) {
     server_port: server.server_port,
     uuid: server.uuid,
     flow: server.flow || undefined,
-    network,
-    tls: server.tls,
+    packet_encoding: 'xudp',
+    tls: tlsConfig,
     transport: server.transport
   };
 
@@ -82,44 +82,54 @@ async function generateSingboxConfig(server, options = {}) {
     }
   ];
 
-  // DNS: encrypted DoH through the tunnel, system resolver only for bootstrap
+  // DNS Configuration (sing-box 1.14+ format)
   const dnsConfig = {
     servers: [
       {
-        type: 'https',
         tag: 'dns-remote',
+        type: 'https',
         server: '1.1.1.1',
+        server_port: 443,
+        path: '/dns-query',
         detour: 'proxy'
       },
       {
-        type: 'local',
-        tag: 'dns-direct'
+        tag: 'dns-direct',
+        type: 'local'
       }
     ],
     final: 'dns-remote',
     strategy: 'ipv4_only'
   };
 
-  // Route rules
+  // Route rules (rule actions in sing-box 1.11+)
   const rules = [
     { action: 'sniff' },
     { protocol: 'dns', action: 'hijack-dns' }
   ];
 
-  // Anti-looping rule: Direct access for server's own IP
+  // Anti-looping rule: Direct access for server's own IP or domain
   if (serverIp) {
+    const prefix = net.isIPv6(serverIp) ? 128 : 32;
     rules.push({
-      ip_cidr: [`${serverIp}/32`],
-      action: 'route',
+      ip_cidr: [`${serverIp}/${prefix}`],
+      outbound: 'direct'
+    });
+  } else if (server.server) {
+    rules.push({
+      domain: [server.server],
       outbound: 'direct'
     });
   }
 
   if (routingMode === 'rule') {
-    // Bypass Private / Local LAN
     rules.push({
       ip_is_private: true,
-      action: 'route',
+      outbound: 'direct'
+    });
+  } else {
+    rules.push({
+      ip_cidr: ['127.0.0.0/8', '::1/128'],
       outbound: 'direct'
     });
   }
@@ -127,14 +137,13 @@ async function generateSingboxConfig(server, options = {}) {
   const routeConfig = {
     rules: rules,
     auto_detect_interface: true,
-    // Used to resolve the proxy server's own domain name (if it is not an IP)
     default_domain_resolver: 'dns-direct',
     final: 'proxy'
   };
 
   return {
     log: {
-      level: 'warn',
+      level: 'info',
       timestamp: true
     },
     dns: dnsConfig,

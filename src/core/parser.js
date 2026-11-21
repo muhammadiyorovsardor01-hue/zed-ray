@@ -14,6 +14,39 @@ function parseVless(link) {
 
     const isReality = params.security === 'reality';
     const isTls = params.security === 'tls';
+    const netType = params.type || 'tcp';
+    const alpnList = params.alpn
+      ? params.alpn.split(',').map(s => s.trim()).filter(Boolean)
+      : (netType === 'ws' && isTls ? ['http/1.1'] : undefined);
+
+    let transport;
+    if (netType === 'ws') {
+      const rawPath = params.path || '/';
+      const edMatch = rawPath.match(/[?&]ed=(\d+)/i);
+      const maxEarlyData = edMatch ? parseInt(edMatch[1], 10) : 0;
+      const cleanPath = rawPath.replace(/[?&]ed=\d+/i, '') || '/';
+      const hostHeader = params.host || params.sni || server;
+      transport = {
+        type: 'ws',
+        path: cleanPath,
+        headers: hostHeader ? { Host: hostHeader } : undefined
+      };
+      if (maxEarlyData > 0) {
+        transport.max_early_data = maxEarlyData;
+        transport.early_data_header_name = 'Sec-WebSocket-Protocol';
+      }
+    } else if (netType === 'grpc') {
+      transport = {
+        type: 'grpc',
+        service_name: params.serviceName || ''
+      };
+    } else if (netType === 'httpupgrade') {
+      transport = {
+        type: 'httpupgrade',
+        host: params.host || params.sni || server,
+        path: params.path || '/'
+      };
+    }
 
     const serverObj = {
       id: 'srv_' + Math.random().toString(36).substring(2, 10),
@@ -22,30 +55,24 @@ function parseVless(link) {
       server: server,
       server_port: port,
       uuid: uuid,
-      network: params.type || 'tcp',
+      network: netType,
       security: params.security || 'none',
       flow: params.flow || '',
       tls: (isReality || isTls) ? {
         enabled: true,
-        server_name: params.sni || server,
+        server_name: params.sni || params.host || server,
         utls: {
           enabled: true,
           fingerprint: params.fp || 'chrome'
         },
+        ...(alpnList && alpnList.length > 0 ? { alpn: alpnList } : {}),
         reality: isReality ? {
           enabled: true,
           public_key: params.pbk || '',
           short_id: params.sid || ''
         } : undefined
       } : undefined,
-      transport: params.type === 'ws' ? {
-        type: 'ws',
-        path: params.path || '/',
-        headers: params.host ? { Host: params.host } : undefined
-      } : params.type === 'grpc' ? {
-        type: 'grpc',
-        service_name: params.serviceName || ''
-      } : undefined,
+      transport,
       raw_link: link,
       ping: -1
     };

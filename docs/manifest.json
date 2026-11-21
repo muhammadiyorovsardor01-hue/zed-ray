@@ -1,0 +1,30 @@
+{
+  "name": "ZedRay PRO VPN",
+  "short_name": "ZedRay",
+  "description": "Sing-box 1.14.4 asosidagi tezkor va barqaror VLESS Reality / WS+TLS VPN mijozi (Windows)",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090B12",
+  "theme_color": "#090B12",
+  "lang": "uz",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

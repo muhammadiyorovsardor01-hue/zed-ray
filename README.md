@@ -2,7 +2,9 @@
 
 > **Sing-box 1.14.4** yadrosi va rasmiy **WinTun** virtual tarmoq drayveri asosida Windows uchun maxsus ishlab chiqilgan, uzilishlarsiz ishlovchi ultra-barqaror VPN & Proxy mijozi.
 
-Ushbu ilova Hiddify va ZedSecure mobil/desktop ilovalari interfeysi uslubida yaratilgan bo'lib, VLESS Reality protokoli hamda obuna havolalarini (subscriptions) to'liq qo'llab-quvvatlaydi.
+Ushbu ilova Hiddify va ZedSecure mobil/desktop ilovalari interfeysi uslubida yaratilgan bo'lib, VLESS Reality, Cloudflare WebSocket + TLS (`alpn: ["http/1.1"]`) hamda obuna havolalarini (subscriptions) to'liq qo'llab-quvvatlaydi.
+
+🌐 **Rasmiy Sayt (PWA / Shortcut):** [https://muhammadiyorovsardor01-hue.github.io/zed-ray/](https://muhammadiyorovsardor01-hue.github.io/zed-ray/) (`docs/` papkasi, GitHub Pages / Vercel tayyor)
 
 ---
 
@@ -39,17 +41,13 @@ Ushbu loyiha ochiq kodli (Open Source) tarzda GitHub'ga yuklanishi uchun to'liq 
 
 ## 🚀 Ishga tushirish (Windows)
 
-### 1-Usul: Bitta bosish bilan (Tavsiya etiladi)
-Ilova papkasidagi **`ZedVPN.bat`** faylini ikki marta bosing. Dastur orqa fonda serverni ishga tushiradi va mustaqil dastur oynasida ochiladi!
+### 1-Usul: Native Desktop Ilova (`ZedRay.exe`) — Tavsiya etiladi
+1. **`ZedRay.exe`** ni (yoki ish stolidagi **`ZedRay`** yorlig‘ini) oching.
+2. Brauzer va Telegram uchun **System Proxy** rejimida darhol **ULASH** tugmasini bosing (`Smart Auto Failover` ishlaydigan serverni o‘zi tanlaydi).
+3. Barcha tizim ilovalari va o‘yinlar uchun **Sozlama → TUN Rejimi**ni tanlang (Administrator ruxsati so‘raydi).
 
-### 2-Usul: Terminal orqali
-```bash
-# Loyiha papkasiga o'ting
-cd nexus-vpn
-
-# Dasturni ishga tushiring
-node launch.js
-```
+### 2-Usul: Node.js Web Interfeys (`ZedRay.bat`)
+Ilova papkasidagi **`ZedRay.bat`** (yoki **`ZedVPN.bat`**) faylini ikki marta bosing yoxud terminalda `node launch.js` bajaring.
 
 ---
 

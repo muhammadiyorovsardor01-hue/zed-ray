@@ -1,4 +1,4 @@
-const { spawn, execFileSync } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -305,18 +305,31 @@ class SingboxManager {
     }
   }
 
+  refreshWinInetProxy() {
+    if (process.platform !== 'win32') return;
+    const psScript = "Add-Type -MemberDefinition '[DllImport(\"wininet.dll\")] public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);' -Name WinInet -Namespace Native; [Native.WinInet]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0) | Out-Null; [Native.WinInet]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0) | Out-Null";
+    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], { windowsHide: true }, () => {});
+  }
+
   enableSystemProxy(port = 20807) {
+    if (process.platform !== 'win32') return;
     const proxyServer = `127.0.0.1:${port}`;
+    const proxyOverride = 'localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>';
     const ok =
       this.setRegistryValue(['/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyServer]) &&
+      this.setRegistryValue(['/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', proxyOverride]) &&
       this.setRegistryValue(['/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1']);
-    if (ok) console.log(`[Proxy] System proxy enabled on ${proxyServer}`);
+    if (ok) {
+      console.log(`[Proxy] System proxy enabled on ${proxyServer}`);
+      this.refreshWinInetProxy();
+    }
   }
 
   disableSystemProxy() {
     if (process.platform !== 'win32') return;
     if (this.setRegistryValue(['/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '0'])) {
       console.log('[Proxy] System proxy disabled.');
+      this.refreshWinInetProxy();
     }
   }
 

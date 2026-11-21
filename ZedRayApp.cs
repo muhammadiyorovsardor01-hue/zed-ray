@@ -8,6 +8,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Globalization;
 using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
@@ -39,8 +41,9 @@ namespace ZedRay
         public string ShortId { get; set; }
         public string Flow { get; set; }
         public string Path { get; set; }
-        public string HostHeader { get; set; }
+        public string WsHost { get; set; }
         public string ServiceName { get; set; }
+        public string Alpn { get; set; }
         public int Ping { get; set; }
         public string Source { get; set; }
     }
@@ -79,13 +82,21 @@ namespace ZedRay
         private string dataDir;
         private string binDir;
         private string serversFile;
+        [DllImport("wininet.dll", SetLastError = true)]
+        private static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+        private const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
+        private const int INTERNET_OPTION_REFRESH = 37;
+
         private string settingsFile;
         private string runtimeConfigFile;
+        private string singboxLogFile;
 
         private List<ServerItem> servers = new List<ServerItem>();
         private AppSettings settings = new AppSettings();
 
         private Process singboxProcess = null;
+        private List<string> lastSingboxLogs = new List<string>();
+        private readonly object logLock = new object();
         private bool isConnected = false;
         private bool isConnecting = false;
         private ServerItem activeServer = null;
@@ -163,6 +174,7 @@ namespace ZedRay
             serversFile = System.IO.Path.Combine(dataDir, "zedray_servers.dat");
             settingsFile = System.IO.Path.Combine(dataDir, "zedray_settings.dat");
             runtimeConfigFile = System.IO.Path.Combine(dataDir, "runtime_config.json");
+            singboxLogFile = System.IO.Path.Combine(dataDir, "singbox.log");
 
             if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
             for (int i = 0; i < 32; i++) speedHistory.Add(0);
@@ -173,7 +185,10 @@ namespace ZedRay
             SetupTimers();
             RefreshAllUI();
 
-            if (servers.Count == 0 && !string.IsNullOrEmpty(settings.SubUrl))
+            this.Closing += (s, e) => { DisconnectVpn(); if (trayIcon != null) trayIcon.Visible = false; };
+
+            bool hasStaleWs = servers.Any(s => string.Equals(s.Network, "ws", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(s.Path));
+            if ((servers.Count == 0 || hasStaleWs) && !string.IsNullOrEmpty(settings.SubUrl))
             {
                 Dispatcher.BeginInvoke(new Action(async () => await SyncSubscriptionAsync()));
             }
@@ -653,7 +668,6 @@ namespace ZedRay
             btnAdd.Margin = new Thickness(6, 0, 0, 0);
             btnAdd.Click += (s, e) => { modalOverlay.Visibility = Visibility.Visible; };
 
-            // Delete the current subscription (only visible while a subscription exists)
             btnDelSub = CreateIconButton("🗑", "#2A1620", "#F87171");
             btnDelSub.Width = 30; btnDelSub.Height = 28;
             btnDelSub.Margin = new Thickness(6, 0, 0, 0);
@@ -1491,8 +1505,6 @@ namespace ZedRay
             }
         }
 
-        // Removes the current subscription and every server that came from it.
-        // Manually added servers are kept.
         private void DeleteSubscription()
         {
             string name = string.IsNullOrEmpty(settings.SubName) ? "Obuna" : settings.SubName;
@@ -1502,7 +1514,6 @@ namespace ZedRay
                 "Obunani o'chirish", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer != MessageBoxResult.Yes) return;
 
-            // Drop the live connection if it runs through a subscription server
             if ((isConnected || isConnecting) && (activeServer == null || activeServer.Source == "subscription"))
                 DisconnectVpn();
 
@@ -1563,6 +1574,8 @@ namespace ZedRay
         }
 
         // ================= VPN CORE ENGINE (SING-BOX) =================
+        private int connectGeneration = 0;
+
         private void ToggleConnection()
         {
             if (isConnected || isConnecting)
@@ -1571,95 +1584,337 @@ namespace ZedRay
                 ConnectVpn();
         }
 
+        private static bool IsRunningAsAdmin()
+        {
+            try
+            {
+                using (WindowsIdentity id = WindowsIdentity.GetCurrent())
+                {
+                    WindowsPrincipal principal = new WindowsPrincipal(id);
+                    return principal.IsInRole(WindowsBuiltInRole.Administrator);
+                }
+            }
+            catch { return false; }
+        }
+
+        private void AppendSingboxLog(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return;
+            lock (logLock)
+            {
+                lastSingboxLogs.Add(line);
+                if (lastSingboxLogs.Count > 120) lastSingboxLogs.RemoveAt(0);
+                try
+                {
+                    if (!string.IsNullOrEmpty(singboxLogFile))
+                        File.AppendAllText(singboxLogFile, line + Environment.NewLine, new UTF8Encoding(false));
+                }
+                catch { }
+            }
+        }
+
+        private string GetRecentErrorSummary()
+        {
+            lock (logLock)
+            {
+                var important = lastSingboxLogs.Where(l =>
+                    l.IndexOf("FATAL", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    l.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    l.IndexOf("reality verification failed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    l.IndexOf("Access is denied", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                if (important.Count > 0)
+                    return string.Join("\n", important.Skip(Math.Max(0, important.Count - 4)));
+                if (lastSingboxLogs.Count > 0)
+                    return string.Join("\n", lastSingboxLogs.Skip(Math.Max(0, lastSingboxLogs.Count - 4)));
+                return "";
+            }
+        }
+
+        private bool HasFatalOrVerificationError()
+        {
+            lock (logLock)
+            {
+                return lastSingboxLogs.Any(l =>
+                    l.IndexOf("FATAL", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    l.IndexOf("Access is denied", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    l.IndexOf("reality verification failed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    l.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 && l.IndexOf("EOF", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+        }
+
+        private static bool IsPortOpen(string host, int port, int timeoutMs = 250)
+        {
+            try
+            {
+                using (TcpClient client = new TcpClient())
+                {
+                    IAsyncResult ar = client.BeginConnect(host, port, null, null);
+                    if (!ar.AsyncWaitHandle.WaitOne(timeoutMs)) return false;
+                    client.EndConnect(ar);
+                    return true;
+                }
+            }
+            catch { return false; }
+        }
+
+        private static bool ProbeProxy(int totalBudgetMs = 5000)
+        {
+            string[] probeUrls = new[]
+            {
+                "http://cp.cloudflare.com/generate_204",
+                "http://connectivitycheck.gstatic.com/generate_204"
+            };
+            Stopwatch sw = Stopwatch.StartNew();
+            foreach (string probeUrl in probeUrls)
+            {
+                int remaining = totalBudgetMs - (int)sw.ElapsedMilliseconds;
+                if (remaining < 1000) break;
+                int reqTimeout = Math.Min(remaining, 4000);
+                try
+                {
+                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create(probeUrl);
+                    req.Proxy = new WebProxy("127.0.0.1", 20807);
+                    req.Timeout = reqTimeout;
+                    req.ReadWriteTimeout = reqTimeout;
+                    req.AllowAutoRedirect = false;
+                    req.UserAgent = "ZedRay/1.0";
+                    using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                    {
+                        int code = (int)resp.StatusCode;
+                        if (code == 200 || code == 204) return true;
+                    }
+                }
+                catch { }
+            }
+            return false;
+        }
+
+        private static async Task<bool> ProbeProxyAsync(int timeoutMs = 4000)
+        {
+            return await Task.Run(() => ProbeProxy(timeoutMs));
+        }
+
         private async void ConnectVpn()
         {
-            ServerItem target = GetTargetServer();
-            if (target == null)
+            if (servers.Count == 0)
             {
                 MessageBox.Show("Hech qanday server topilmadi! Serverlar bo'limidan VLESS link qo'shing.", "ZedRay", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
+            if (settings.Mode == "tun" && !IsRunningAsAdmin())
+            {
+                MessageBoxResult res = MessageBox.Show(
+                    "TUN rejimi Administrator huquqini talab qiladi.\nZedRay dasturini Administrator sifatida qayta ishga tushiramizmi?",
+                    "ZedRay · Administrator huquqi",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (res == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        string exePath = Process.GetCurrentProcess().MainModule.FileName;
+                        ProcessStartInfo elevPsi = new ProcessStartInfo
+                        {
+                            FileName = exePath,
+                            Verb = "runas",
+                            UseShellExecute = true,
+                            WorkingDirectory = appDir
+                        };
+                        Process.Start(elevPsi);
+                        if (trayIcon != null) trayIcon.Visible = false;
+                        Application.Current.Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Administrator sifatida ishga tushirib bo'lmadi: " + ex.Message, "ZedRay", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                return;
+            }
+
+            bool isAuto = (settings.SelectedServerId == "auto" || string.IsNullOrEmpty(settings.SelectedServerId));
+            List<ServerItem> candidates = new List<ServerItem>();
+            if (isAuto)
+            {
+                candidates.AddRange(servers.Where(s => s.Ping > 0).OrderBy(s => s.Ping));
+                candidates.AddRange(servers.Where(s => s.Ping <= 0));
+            }
+            else
+            {
+                ServerItem chosen = servers.FirstOrDefault(s => s.Id == settings.SelectedServerId) ?? servers[0];
+                candidates.Add(chosen);
+            }
+
+            int gen = ++connectGeneration;
             isConnecting = true;
-            activeServer = target;
+            isConnected = false;
+            activeServer = candidates[0];
             UpdateConnectionVisuals();
+            UpdateActiveServerPreview();
+
+            string finalError = null;
+            bool connected = false;
+            ServerItem connectedServer = null;
 
             await Task.Run(() =>
             {
                 try
                 {
-                    StopExistingSingbox();
-                    string configJson = GenerateSingboxJson(target);
-                    File.WriteAllText(runtimeConfigFile, configJson, new UTF8Encoding(false));
-
                     string singboxExe = System.IO.Path.Combine(binDir, "sing-box.exe");
                     if (!File.Exists(singboxExe)) singboxExe = "sing-box.exe";
 
-                    ProcessStartInfo psi = new ProcessStartInfo
+                    for (int idx = 0; idx < candidates.Count; idx++)
                     {
-                        FileName = singboxExe,
-                        Arguments = "run -c \"" + runtimeConfigFile + "\"",
-                        WorkingDirectory = binDir,
-                        CreateNoWindow = true,
-                        UseShellExecute = false,
-                        RedirectStandardError = true,
-                        RedirectStandardOutput = true,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    };
-
-                    // Keep the core's log in data\singbox.log so connection problems can be diagnosed
-                    string coreLogFile = System.IO.Path.Combine(dataDir, "singbox.log");
-                    try { File.WriteAllText(coreLogFile, "", new UTF8Encoding(false)); } catch { }
-
-                    StringBuilder coreLog = new StringBuilder();
-                    singboxProcess = Process.Start(psi);
-                    singboxProcess.ErrorDataReceived += (s2, e2) =>
-                    {
-                        if (e2.Data == null) return;
-                        lock (coreLog)
+                        if (gen != connectGeneration) return;
+                        ServerItem candidate = candidates[idx];
+                        Dispatcher.Invoke(() =>
                         {
-                            coreLog.AppendLine(e2.Data);
-                            try { File.AppendAllText(coreLogFile, e2.Data + "\r\n", new UTF8Encoding(false)); } catch { }
+                            if (gen == connectGeneration)
+                            {
+                                activeServer = candidate;
+                                UpdateActiveServerPreview();
+                            }
+                        });
+
+                        StopExistingSingbox();
+                        SetWindowsSystemProxy(false, "");
+
+                        lock (logLock)
+                        {
+                            lastSingboxLogs.Clear();
+                            try { File.WriteAllText(singboxLogFile, "", new UTF8Encoding(false)); } catch { }
                         }
-                    };
-                    singboxProcess.OutputDataReceived += (s2, e2) => { };
-                    singboxProcess.BeginErrorReadLine();
-                    singboxProcess.BeginOutputReadLine();
-                    System.Threading.Thread.Sleep(1500);
 
-                    // If the core died right after start (bad config, missing wintun.dll, no admin rights...)
-                    // report the real reason instead of showing a fake "connected" state.
-                    if (singboxProcess.HasExited)
-                    {
-                        string reason;
-                        lock (coreLog) reason = coreLog.ToString().Trim();
-                        singboxProcess = null;
-                        throw new Exception("sing-box ishga tushmadi." + (reason.Length > 0 ? "\n\n" + reason : "\n\nTUN rejimi uchun dasturni Administrator sifatida ishga tushiring."));
+                        string configJson = GenerateSingboxJson(candidate);
+                        File.WriteAllText(runtimeConfigFile, configJson, new UTF8Encoding(false));
+
+                        ProcessStartInfo psi = new ProcessStartInfo
+                        {
+                            FileName = singboxExe,
+                            Arguments = "run -c \"" + runtimeConfigFile + "\"",
+                            WorkingDirectory = binDir,
+                            CreateNoWindow = true,
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true
+                        };
+
+                        Process proc = Process.Start(psi);
+                        singboxProcess = proc;
+                        proc.OutputDataReceived += (s, e) => AppendSingboxLog(e.Data);
+                        proc.ErrorDataReceived += (s, e) => AppendSingboxLog(e.Data);
+                        proc.BeginOutputReadLine();
+                        proc.BeginErrorReadLine();
+
+                        bool portReady = false;
+                        bool crashedEarly = false;
+                        for (int waitMs = 0; waitMs < 2500; waitMs += 150)
+                        {
+                            if (gen != connectGeneration) { StopExistingSingbox(); return; }
+                            if (proc.HasExited)
+                            {
+                                crashedEarly = true;
+                                System.Threading.Thread.Sleep(150);
+                                break;
+                            }
+                            if (IsPortOpen("127.0.0.1", 20807, 200))
+                            {
+                                portReady = true;
+                                break;
+                            }
+                            System.Threading.Thread.Sleep(150);
+                        }
+
+                        if (crashedEarly || proc.HasExited || !portReady)
+                        {
+                            string errLine = GetRecentErrorSummary();
+                            finalError = candidate.Name + ": yadro ishga tushmadi." + (string.IsNullOrEmpty(errLine) ? "" : ("\n" + errLine));
+                            StopExistingSingbox();
+                            if (isAuto && idx < candidates.Count - 1) continue;
+                            break;
+                        }
+
+                        bool probeOk = ProbeProxy(5000);
+                        System.Threading.Thread.Sleep(100);
+                        if (gen != connectGeneration) { StopExistingSingbox(); return; }
+
+                        if (probeOk && !proc.HasExited)
+                        {
+                            connected = true;
+                            connectedServer = candidate;
+                            break;
+                        }
+
+                        bool hasFatalErr = HasFatalOrVerificationError() || proc.HasExited;
+                        if (isAuto && idx < candidates.Count - 1)
+                        {
+                            string errLine = GetRecentErrorSummary();
+                            finalError = candidate.Name + ": ulanish tekshiruvi o'tmadi." + (string.IsNullOrEmpty(errLine) ? "" : ("\n" + errLine));
+                            StopExistingSingbox();
+                            continue;
+                        }
+
+                        if (!isAuto && !hasFatalErr && !proc.HasExited && portReady)
+                        {
+                            // Manual single server started and listens cleanly without fatal/verification errors
+                            connected = true;
+                            connectedServer = candidate;
+                            break;
+                        }
+
+                        string detail = GetRecentErrorSummary();
+                        finalError = candidate.Name + ": tunnel orqali internet o'tmadi." + (string.IsNullOrEmpty(detail) ? "" : ("\n" + detail));
+                        StopExistingSingbox();
                     }
 
-                    if (settings.Mode == "system_proxy")
-                    {
-                        SetWindowsSystemProxy(true, "127.0.0.1:20807");
-                    }
+                    if (gen != connectGeneration) { StopExistingSingbox(); return; }
 
-                    isConnected = true;
-                    isConnecting = false;
-                    connectStartTime = DateTime.Now;
+                    if (connected && connectedServer != null)
+                    {
+                        activeServer = connectedServer;
+                        if (settings.Mode == "system_proxy")
+                        {
+                            SetWindowsSystemProxy(true, "127.0.0.1:20807");
+                        }
+                        isConnected = true;
+                        isConnecting = false;
+                        connectStartTime = DateTime.Now;
+                    }
+                    else
+                    {
+                        SetWindowsSystemProxy(false, "");
+                        StopExistingSingbox();
+                        isConnected = false;
+                        isConnecting = false;
+                        activeServer = null;
+                    }
                 }
                 catch (Exception ex)
                 {
+                    SetWindowsSystemProxy(false, "");
+                    StopExistingSingbox();
                     isConnected = false;
                     isConnecting = false;
-                    Dispatcher.Invoke(() => MessageBox.Show("Ulanish xatosi: " + ex.Message, "ZedRay Error", MessageBoxButton.OK, MessageBoxImage.Error));
+                    activeServer = null;
+                    finalError = ex.Message;
                 }
             });
 
+            if (gen != connectGeneration) return;
+
             UpdateConnectionVisuals();
             UpdateActiveServerPreview();
+
+            if (!connected && !string.IsNullOrEmpty(finalError))
+            {
+                MessageBox.Show("Ulanish amalga oshmadi:\n\n" + finalError, "ZedRay Xatolik", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void DisconnectVpn()
         {
+            connectGeneration++;
             isConnected = false;
             isConnecting = false;
             activeServer = null;
@@ -1676,18 +1931,29 @@ namespace ZedRay
                 if (singboxProcess != null && !singboxProcess.HasExited)
                 {
                     singboxProcess.Kill();
-                    singboxProcess = null;
+                    singboxProcess.WaitForExit(1500);
                 }
             }
             catch { }
+            singboxProcess = null;
 
-            // Also clean up orphaned cores left over from a crashed session; they keep
-            // port 20807 / the TUN adapter busy and make the next start fail.
             try
             {
+                string targetExe = System.IO.Path.GetFullPath(System.IO.Path.Combine(binDir, "sing-box.exe"));
                 foreach (Process p in Process.GetProcessesByName("sing-box"))
                 {
-                    try { p.Kill(); p.WaitForExit(2000); } catch { }
+                    try
+                    {
+                        string procPath = p.MainModule != null ? p.MainModule.FileName : "";
+                        if (!string.IsNullOrEmpty(procPath) &&
+                            string.Equals(System.IO.Path.GetFullPath(procPath), targetExe, StringComparison.OrdinalIgnoreCase))
+                        {
+                            p.Kill();
+                            p.WaitForExit(1500);
+                        }
+                    }
+                    catch { }
+                    finally { p.Dispose(); }
                 }
             }
             catch { }
@@ -1703,30 +1969,174 @@ namespace ZedRay
                     {
                         key.SetValue("ProxyEnable", enable ? 1 : 0, RegistryValueKind.DWord);
                         if (enable && !string.IsNullOrEmpty(proxyAddr))
+                        {
                             key.SetValue("ProxyServer", proxyAddr, RegistryValueKind.String);
+                            key.SetValue("ProxyOverride", "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>", RegistryValueKind.String);
+                        }
                     }
                 }
+                InternetSetOption(IntPtr.Zero, INTERNET_OPTION_SETTINGS_CHANGED, IntPtr.Zero, 0);
+                InternetSetOption(IntPtr.Zero, INTERNET_OPTION_REFRESH, IntPtr.Zero, 0);
             }
             catch { }
         }
 
         private string GenerateSingboxJson(ServerItem srv)
         {
-            string resolvedIp = srv.Host;
-            try
+            string net = (srv.Network ?? "tcp").Trim().ToLowerInvariant();
+            string sec = (srv.Security ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(sec) && !string.IsNullOrEmpty(srv.PublicKey)) sec = "reality";
+
+            // Anti-loop direct rule for the VPN server IP or domain
+            string directServerRule;
+            IPAddress parsedIp;
+            if (IPAddress.TryParse(srv.Host, out parsedIp))
             {
-                IPAddress[] ips = Dns.GetHostAddresses(srv.Host);
-                if (ips.Length > 0) resolvedIp = ips[0].ToString();
+                string cidr = parsedIp.AddressFamily == AddressFamily.InterNetworkV6 ? (parsedIp + "/128") : (parsedIp + "/32");
+                directServerRule = "      { \"ip_cidr\": [ \"" + EscapeJson(cidr) + "\" ], \"outbound\": \"direct\" },";
             }
-            catch { }
+            else
+            {
+                List<string> cidrs = new List<string>();
+                try
+                {
+                    IPAddress[] ips = Dns.GetHostAddresses(srv.Host);
+                    foreach (var ip in ips.Where(x => x.AddressFamily == AddressFamily.InterNetwork))
+                        cidrs.Add("\"" + EscapeJson(ip + "/32") + "\"");
+                    if (cidrs.Count == 0)
+                    {
+                        foreach (var ip in ips)
+                            cidrs.Add("\"" + EscapeJson(ip + (ip.AddressFamily == AddressFamily.InterNetworkV6 ? "/128" : "/32")) + "\"");
+                    }
+                }
+                catch { }
+                if (cidrs.Count > 0)
+                    directServerRule = "      { \"ip_cidr\": [ " + string.Join(", ", cidrs) + " ], \"outbound\": \"direct\" },";
+                else
+                    directServerRule = "      { \"domain\": [ \"" + EscapeJson(srv.Host) + "\" ], \"outbound\": \"direct\" },";
+            }
+
+            List<string> proxyFields = new List<string>();
+            proxyFields.Add("      \"type\": \"vless\"");
+            proxyFields.Add("      \"tag\": \"proxy\"");
+            proxyFields.Add("      \"server\": \"" + EscapeJson(srv.Host) + "\"");
+            proxyFields.Add("      \"server_port\": " + srv.Port);
+            proxyFields.Add("      \"uuid\": \"" + EscapeJson(srv.Uuid) + "\"");
+            if (!string.IsNullOrEmpty(srv.Flow))
+                proxyFields.Add("      \"flow\": \"" + EscapeJson(srv.Flow) + "\"");
+            proxyFields.Add("      \"packet_encoding\": \"xudp\"");
+
+            // TLS block
+            if (sec == "reality")
+            {
+                string sni = string.IsNullOrEmpty(srv.Sni) ? srv.Host : srv.Sni;
+                string fp = string.IsNullOrEmpty(srv.Fingerprint) ? "chrome" : srv.Fingerprint;
+                StringBuilder tlsSb = new StringBuilder();
+                tlsSb.AppendLine("      \"tls\": {");
+                tlsSb.AppendLine("        \"enabled\": true,");
+                tlsSb.AppendLine("        \"server_name\": \"" + EscapeJson(sni) + "\",");
+                tlsSb.AppendLine("        \"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" },");
+                tlsSb.AppendLine("        \"reality\": { \"enabled\": true, \"public_key\": \"" + EscapeJson(srv.PublicKey) + "\", \"short_id\": \"" + EscapeJson(srv.ShortId) + "\" }");
+                tlsSb.Append("      }");
+                proxyFields.Add(tlsSb.ToString());
+            }
+            else if (sec == "tls")
+            {
+                string sni = !string.IsNullOrEmpty(srv.Sni) ? srv.Sni : (!string.IsNullOrEmpty(srv.WsHost) ? srv.WsHost : srv.Host);
+                string fp = string.IsNullOrEmpty(srv.Fingerprint) ? "chrome" : srv.Fingerprint;
+                List<string> alpnList = new List<string>();
+                if (!string.IsNullOrEmpty(srv.Alpn))
+                {
+                    foreach (string item in srv.Alpn.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string trimmed = item.Trim();
+                        if (!string.IsNullOrEmpty(trimmed)) alpnList.Add("\"" + EscapeJson(trimmed) + "\"");
+                    }
+                }
+                else if (net == "ws")
+                {
+                    alpnList.Add("\"http/1.1\"");
+                }
+
+                StringBuilder tlsSb = new StringBuilder();
+                tlsSb.AppendLine("      \"tls\": {");
+                tlsSb.AppendLine("        \"enabled\": true,");
+                tlsSb.AppendLine("        \"server_name\": \"" + EscapeJson(sni) + "\",");
+                if (alpnList.Count > 0)
+                {
+                    tlsSb.AppendLine("        \"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" },");
+                    tlsSb.AppendLine("        \"alpn\": [ " + string.Join(", ", alpnList) + " ]");
+                }
+                else
+                {
+                    tlsSb.AppendLine("        \"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" }");
+                }
+                tlsSb.Append("      }");
+                proxyFields.Add(tlsSb.ToString());
+            }
+
+            // Transport block
+            if (net == "ws")
+            {
+                string rawPath = string.IsNullOrEmpty(srv.Path) ? "/" : srv.Path;
+                string wsPath = rawPath;
+                int maxEarlyData = 0;
+                Match edMatch = Regex.Match(rawPath, @"[?&]ed=(\d+)", RegexOptions.IgnoreCase);
+                if (edMatch.Success)
+                {
+                    int.TryParse(edMatch.Groups[1].Value, out maxEarlyData);
+                    wsPath = Regex.Replace(rawPath, @"[?&]ed=\d+", "", RegexOptions.IgnoreCase);
+                    if (string.IsNullOrEmpty(wsPath)) wsPath = "/";
+                }
+                string hostHeader = !string.IsNullOrEmpty(srv.WsHost) ? srv.WsHost : (!string.IsNullOrEmpty(srv.Sni) ? srv.Sni : srv.Host);
+
+                StringBuilder trSb = new StringBuilder();
+                trSb.AppendLine("      \"transport\": {");
+                trSb.AppendLine("        \"type\": \"ws\",");
+                trSb.AppendLine("        \"path\": \"" + EscapeJson(wsPath) + "\",");
+                if (maxEarlyData > 0)
+                {
+                    trSb.AppendLine("        \"headers\": { \"Host\": \"" + EscapeJson(hostHeader) + "\" },");
+                    trSb.AppendLine("        \"max_early_data\": " + maxEarlyData + ",");
+                    trSb.AppendLine("        \"early_data_header_name\": \"Sec-WebSocket-Protocol\"");
+                }
+                else
+                {
+                    trSb.AppendLine("        \"headers\": { \"Host\": \"" + EscapeJson(hostHeader) + "\" }");
+                }
+                trSb.Append("      }");
+                proxyFields.Add(trSb.ToString());
+            }
+            else if (net == "grpc")
+            {
+                string grpcService = !string.IsNullOrEmpty(srv.ServiceName) ? srv.ServiceName : (srv.Path ?? "");
+                StringBuilder trSb = new StringBuilder();
+                trSb.AppendLine("      \"transport\": {");
+                trSb.AppendLine("        \"type\": \"grpc\",");
+                trSb.AppendLine("        \"service_name\": \"" + EscapeJson(grpcService) + "\"");
+                trSb.Append("      }");
+                proxyFields.Add(trSb.ToString());
+            }
+            else if (net == "httpupgrade")
+            {
+                string huPath = string.IsNullOrEmpty(srv.Path) ? "/" : srv.Path;
+                string hostHeader = !string.IsNullOrEmpty(srv.WsHost) ? srv.WsHost : (!string.IsNullOrEmpty(srv.Sni) ? srv.Sni : srv.Host);
+                StringBuilder trSb = new StringBuilder();
+                trSb.AppendLine("      \"transport\": {");
+                trSb.AppendLine("        \"type\": \"httpupgrade\",");
+                trSb.AppendLine("        \"host\": \"" + EscapeJson(hostHeader) + "\",");
+                trSb.AppendLine("        \"path\": \"" + EscapeJson(huPath) + "\"");
+                trSb.Append("      }");
+                proxyFields.Add(trSb.ToString());
+            }
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("{");
-            sb.AppendLine("  \"log\": { \"level\": \"warn\" },");
+            sb.AppendLine("  \"log\": { \"level\": \"info\", \"timestamp\": true },");
             sb.AppendLine("  \"dns\": {");
             sb.AppendLine("    \"servers\": [");
-            sb.AppendLine("      { \"type\": \"https\", \"tag\": \"dns-remote\", \"server\": \"1.1.1.1\", \"detour\": \"proxy\" },");
-            sb.AppendLine("      { \"type\": \"local\", \"tag\": \"dns-direct\" }");
+            sb.AppendLine("      { \"tag\": \"dns-remote\", \"type\": \"https\", \"server\": \"1.1.1.1\", \"server_port\": 443, \"path\": \"/dns-query\", \"detour\": \"proxy\" },");
+            sb.AppendLine("      { \"tag\": \"dns-direct\", \"type\": \"local\" }");
             sb.AppendLine("    ],");
             sb.AppendLine("    \"final\": \"dns-remote\",");
             sb.AppendLine("    \"strategy\": \"ipv4_only\"");
@@ -1739,46 +2149,8 @@ namespace ZedRay
             }
             sb.AppendLine("  ],");
             sb.AppendLine("  \"outbounds\": [");
-            // The outbound follows the server's real security/transport: REALITY, plain TLS or none,
-            // over tcp / ws / grpc / httpupgrade. (It used to force REALITY+TCP for every server,
-            // which broke all WS/TLS servers.)
-            string net = (srv.Network ?? "tcp").ToLowerInvariant();
-            string sec = (srv.Security ?? "none").ToLowerInvariant();
-            string sni = string.IsNullOrEmpty(srv.Sni) ? srv.Host : srv.Sni;
-            string fp = string.IsNullOrEmpty(srv.Fingerprint) ? "chrome" : srv.Fingerprint;
-            string wsHost = !string.IsNullOrEmpty(srv.HostHeader) ? srv.HostHeader : sni;
-            string wsPath = string.IsNullOrEmpty(srv.Path) ? "/" : srv.Path;
-
-            List<string> props = new List<string>();
-            props.Add("      \"type\": \"vless\"");
-            props.Add("      \"tag\": \"proxy\"");
-            props.Add("      \"server\": \"" + EscapeJson(srv.Host) + "\"");
-            props.Add("      \"server_port\": " + srv.Port);
-            props.Add("      \"uuid\": \"" + EscapeJson(srv.Uuid) + "\"");
-            if (!string.IsNullOrEmpty(srv.Flow) && net == "tcp")
-                props.Add("      \"flow\": \"" + EscapeJson(srv.Flow) + "\"");
-
-            if (sec == "reality")
-            {
-                props.Add("      \"tls\": { \"enabled\": true, \"server_name\": \"" + EscapeJson(sni) + "\", " +
-                          "\"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" }, " +
-                          "\"reality\": { \"enabled\": true, \"public_key\": \"" + EscapeJson(srv.PublicKey) + "\", \"short_id\": \"" + EscapeJson(srv.ShortId) + "\" } }");
-            }
-            else if (sec == "tls")
-            {
-                props.Add("      \"tls\": { \"enabled\": true, \"server_name\": \"" + EscapeJson(sni) + "\", " +
-                          "\"utls\": { \"enabled\": true, \"fingerprint\": \"" + EscapeJson(fp) + "\" } }");
-            }
-
-            if (net == "ws")
-                props.Add("      \"transport\": { \"type\": \"ws\", \"path\": \"" + EscapeJson(wsPath) + "\", \"headers\": { \"Host\": \"" + EscapeJson(wsHost) + "\" } }");
-            else if (net == "grpc")
-                props.Add("      \"transport\": { \"type\": \"grpc\", \"service_name\": \"" + EscapeJson(srv.ServiceName) + "\" }");
-            else if (net == "httpupgrade")
-                props.Add("      \"transport\": { \"type\": \"httpupgrade\", \"host\": \"" + EscapeJson(wsHost) + "\", \"path\": \"" + EscapeJson(wsPath) + "\" }");
-
             sb.AppendLine("    {");
-            sb.AppendLine(string.Join(",\n", props));
+            sb.AppendLine(string.Join(",\r\n", proxyFields));
             sb.AppendLine("    },");
             sb.AppendLine("    { \"type\": \"direct\", \"tag\": \"direct\" }");
             sb.AppendLine("  ],");
@@ -1786,9 +2158,11 @@ namespace ZedRay
             sb.AppendLine("    \"rules\": [");
             sb.AppendLine("      { \"action\": \"sniff\" },");
             sb.AppendLine("      { \"protocol\": \"dns\", \"action\": \"hijack-dns\" },");
-            sb.AppendLine("      { \"ip_cidr\": [ \"" + resolvedIp + "/32\" ], \"action\": \"route\", \"outbound\": \"direct\" }" + (settings.Routing == "rule" ? "," : ""));
+            sb.AppendLine(directServerRule);
             if (settings.Routing == "rule")
-                sb.AppendLine("      { \"ip_is_private\": true, \"action\": \"route\", \"outbound\": \"direct\" }");
+                sb.AppendLine("      { \"ip_is_private\": true, \"outbound\": \"direct\" }");
+            else
+                sb.AppendLine("      { \"ip_cidr\": [ \"127.0.0.0/8\", \"::1/128\" ], \"outbound\": \"direct\" }");
             sb.AppendLine("    ],");
             sb.AppendLine("    \"auto_detect_interface\": true,");
             sb.AppendLine("    \"default_domain_resolver\": \"dns-direct\",");
@@ -1802,12 +2176,15 @@ namespace ZedRay
         {
             if (isConnected)
             {
+                string secLabel = (activeServer != null && !string.IsNullOrEmpty(activeServer.Security))
+                    ? activeServer.Security.ToUpper()
+                    : "TLS";
                 headerStatusDot.Fill = BrushFromHex("#10B981");
                 headerStatusText.Text = "HIMOYALANGAN";
                 headerStatusText.Foreground = BrushFromHex("#10B981");
 
                 securityCard.BorderBrush = BrushFromHex("#10B981");
-                secTitleText.Text = "HIMOYA YOQILGAN · VLESS REALITY";
+                secTitleText.Text = "HIMOYA YOQILGAN · VLESS " + secLabel;
                 secTitleText.Foreground = BrushFromHex("#10B981");
                 secSubText.Text = "Shifrlangan kanal: " + (activeServer != null ? activeServer.Host : "Faol") + " · MTU " + settings.Mtu;
 
@@ -1877,18 +2254,23 @@ namespace ZedRay
             watchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
             watchdogTimer.Tick += async (s, e) =>
             {
-                if (!isConnected || isConnecting || !settings.Watchdog || activeServer == null) return;
+                if (!isConnected || isConnecting || activeServer == null) return;
 
-                // sing-box process crashed -> restart immediately
                 if (singboxProcess == null || singboxProcess.HasExited)
                 {
+                    if (!settings.Watchdog)
+                    {
+                        DisconnectVpn();
+                        return;
+                    }
                     watchdogFails = 0;
                     ConnectVpn();
                     return;
                 }
 
-                int ping = await TestTcpPingAsync(activeServer.Host, activeServer.Port, 2500);
-                if (ping <= 0)
+                if (!settings.Watchdog) return;
+                bool ok = await ProbeProxyAsync(4000);
+                if (!ok)
                 {
                     watchdogFails++;
                     if (watchdogFails >= 2)
@@ -2049,7 +2431,7 @@ namespace ZedRay
                 if (!link.StartsWith("vless://", StringComparison.OrdinalIgnoreCase)) return null;
                 Uri uri = new Uri(link);
                 string uuid = uri.UserInfo;
-                string host = uri.Host;
+                string host = !string.IsNullOrEmpty(uri.DnsSafeHost) ? uri.DnsSafeHost : uri.Host;
                 int port = uri.Port > 0 ? uri.Port : 443;
                 string name = !string.IsNullOrEmpty(uri.Fragment) ? Uri.UnescapeDataString(uri.Fragment.TrimStart('#')) : (host + ":" + port);
 
@@ -2061,6 +2443,22 @@ namespace ZedRay
                     if (kv.Length == 2) query[kv[0]] = Uri.UnescapeDataString(kv[1]);
                 }
 
+                string network = query.ContainsKey("type") && !string.IsNullOrEmpty(query["type"]) ? query["type"] : "tcp";
+                string pbk = query.ContainsKey("pbk") ? query["pbk"] : "";
+                string security = query.ContainsKey("security") && !string.IsNullOrEmpty(query["security"])
+                    ? query["security"]
+                    : (!string.IsNullOrEmpty(pbk) ? "reality" : "none");
+                string wsHost = query.ContainsKey("host") ? query["host"] : "";
+                string sni = query.ContainsKey("sni") && !string.IsNullOrEmpty(query["sni"])
+                    ? query["sni"]
+                    : (!string.IsNullOrEmpty(wsHost) ? wsHost : host);
+                string fp = query.ContainsKey("fp") && !string.IsNullOrEmpty(query["fp"]) ? query["fp"] : "chrome";
+                string sid = query.ContainsKey("sid") ? query["sid"] : "";
+                string flow = query.ContainsKey("flow") ? query["flow"] : "";
+                string pathVal = query.ContainsKey("path") ? query["path"] : "";
+                string serviceName = query.ContainsKey("serviceName") ? query["serviceName"] : "";
+                string alpn = query.ContainsKey("alpn") ? query["alpn"] : "";
+
                 return new ServerItem
                 {
                     Id = "srv_" + Guid.NewGuid().ToString("N").Substring(0, 8),
@@ -2069,17 +2467,17 @@ namespace ZedRay
                     Host = host,
                     Port = port,
                     Uuid = uuid,
-                    Network = query.ContainsKey("type") ? query["type"] : "tcp",
-                    // No "security" in a link means plain; a public key without it still means REALITY
-                    Security = query.ContainsKey("security") ? query["security"] : (query.ContainsKey("pbk") ? "reality" : "none"),
-                    Sni = query.ContainsKey("sni") ? query["sni"] : (query.ContainsKey("host") ? query["host"] : host),
-                    Fingerprint = query.ContainsKey("fp") ? query["fp"] : "chrome",
-                    PublicKey = query.ContainsKey("pbk") ? query["pbk"] : "",
-                    ShortId = query.ContainsKey("sid") ? query["sid"] : "",
-                    Flow = query.ContainsKey("flow") ? query["flow"] : "",
-                    Path = query.ContainsKey("path") ? query["path"] : "",
-                    HostHeader = query.ContainsKey("host") ? query["host"] : "",
-                    ServiceName = query.ContainsKey("serviceName") ? query["serviceName"] : "",
+                    Network = network,
+                    Security = security,
+                    Sni = sni,
+                    Fingerprint = fp,
+                    PublicKey = pbk,
+                    ShortId = sid,
+                    Flow = flow,
+                    Path = pathVal,
+                    WsHost = wsHost,
+                    ServiceName = serviceName,
+                    Alpn = alpn,
                     Ping = 0,
                     Source = "manual"
                 };
@@ -2343,8 +2741,9 @@ namespace ZedRay
                                 Ping = p.Length > 13 ? int.Parse(p[13]) : 0,
                                 Source = p.Length > 14 ? p[14] : "manual",
                                 Path = p.Length > 15 ? p[15] : "",
-                                HostHeader = p.Length > 16 ? p[16] : "",
-                                ServiceName = p.Length > 17 ? p[17] : ""
+                                WsHost = p.Length > 16 ? p[16] : "",
+                                ServiceName = p.Length > 17 ? p[17] : "",
+                                Alpn = p.Length > 18 ? p[18] : ""
                             });
                         }
                     }
@@ -2391,7 +2790,7 @@ namespace ZedRay
                 List<string> lines = servers.Select(s => string.Join("|",
                     Clean(s.Id), Clean(s.Name), Clean(s.Country), Clean(s.Host), s.Port, Clean(s.Uuid), Clean(s.Network),
                     Clean(s.Security), Clean(s.Sni), Clean(s.Fingerprint), Clean(s.PublicKey), Clean(s.ShortId), Clean(s.Flow),
-                    s.Ping, Clean(s.Source), Clean(s.Path), Clean(s.HostHeader), Clean(s.ServiceName))).ToList();
+                    s.Ping, Clean(s.Source), Clean(s.Path), Clean(s.WsHost), Clean(s.ServiceName), Clean(s.Alpn))).ToList();
                 File.WriteAllLines(serversFile, lines, Encoding.UTF8);
 
                 string cfg = string.Join("|", settings.Mode, settings.Mtu, settings.Watchdog, settings.Routing, settings.SelectedServerId,
