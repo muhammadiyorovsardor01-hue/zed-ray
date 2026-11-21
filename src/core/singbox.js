@@ -5,6 +5,7 @@ const http = require('http');
 const net = require('net');
 const { generateSingboxConfig } = require('./config-generator');
 const { findFreePort } = require('./ping');
+const { detectPhysicalIpv4, isRealityServer, generateXraySidecarConfig } = require('./xray-config');
 
 const REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -78,9 +79,13 @@ class SingboxManager {
   constructor(options = {}) {
     this.binDir = options.binDir || path.resolve(__dirname, '../../bin');
     this.singboxPath = path.join(this.binDir, 'sing-box.exe');
+    this.xrayPath = path.join(this.binDir, 'xray.exe');
     this.configPath = path.resolve(__dirname, '../../data/runtime_config.json');
+    this.xrayConfigPath = path.resolve(__dirname, '../../data/xray_runtime_config.json');
 
     this.process = null;
+    this.xrayProcess = null;
+    this.activeCore = 'sing-box';
     this.status = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'error'
     this.activeServer = null;
     this.connectionStartTime = null;
@@ -138,7 +143,7 @@ class SingboxManager {
   }
 
   async start(server, options = {}) {
-    if (this.process) {
+    if (this.process || this.xrayProcess) {
       await this.stop();
     } else {
       this.stopTrafficMonitor();
@@ -152,20 +157,108 @@ class SingboxManager {
     this.lastError = null;
     this.dlBps = 0;
     this.ulBps = 0;
+    this.activeCore = 'sing-box';
 
     let proc = null;
+    let xrayProc = null;
 
     try {
-      const clashApiPort = await findFreePort(9091);
-      const configObj = await generateSingboxConfig(server, {
-        ...options,
-        clashApiPort
-      });
-
       const dataDir = path.dirname(this.configPath);
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
+
+      const useXraySidecar = isRealityServer(server) && fs.existsSync(this.xrayPath);
+      let xrayPort = 0;
+      let xrayExited = false;
+      let rawStartError = '';
+
+      const captureCoreError = (text) => {
+        const lower = String(text || '').toLowerCase();
+        if (
+          lower.includes('fatal') ||
+          lower.includes('error') ||
+          lower.includes('failed') ||
+          lower.includes('reality') ||
+          lower.includes('i/o timeout') ||
+          lower.includes('timeout') ||
+          lower.includes('connection refused') ||
+          lower.includes('reset by peer') ||
+          lower.includes('rejected')
+        ) {
+          rawStartError = String(text).trim();
+          this.lastError = rawStartError;
+        }
+      };
+
+      if (useXraySidecar) {
+        xrayPort = await findFreePort(0);
+        const sendThrough = detectPhysicalIpv4();
+        const xrayConfigObj = generateXraySidecarConfig(server, xrayPort, sendThrough);
+        fs.writeFileSync(this.xrayConfigPath, JSON.stringify(xrayConfigObj, null, 2), 'utf-8');
+
+        console.log(`[Xray] Launching ${this.xrayPath} (SOCKS sidecar on 127.0.0.1:${xrayPort})`);
+        xrayProc = spawn(this.xrayPath, ['run', '-c', this.xrayConfigPath], {
+          cwd: this.binDir,
+          windowsHide: true
+        });
+        this.xrayProcess = xrayProc;
+
+        xrayProc.on('error', (err) => {
+          xrayExited = true;
+          rawStartError = `xray ishga tushmadi: ${err.message}`;
+          this.lastError = rawStartError;
+          console.error(`[Xray] ${rawStartError}`);
+        });
+
+        xrayProc.stdout.on('data', (data) => {
+          const text = data.toString();
+          console.log(`[Xray stdout]: ${text}`);
+          captureCoreError(text);
+        });
+
+        xrayProc.stderr.on('data', (data) => {
+          const text = data.toString();
+          console.warn(`[Xray stderr]: ${text}`);
+          captureCoreError(text);
+        });
+
+        xrayProc.on('close', (code) => {
+          console.log(`[Xray] Process exited with code ${code}`);
+          xrayExited = true;
+          if (this.xrayProcess !== xrayProc) return;
+          this.xrayProcess = null;
+          if (this.status === 'connected' && !this.isReconnecting) {
+            this.handleUnexpectedExit();
+          }
+        });
+
+        await waitForLocalPort(xrayPort, 2500, () => xrayExited);
+        await sleep(150);
+
+        if (xrayExited) {
+          if (this.xrayProcess === xrayProc) this.xrayProcess = null;
+          this.disableSystemProxy();
+          this.stopTrafficMonitor();
+          this.status = 'error';
+          this.activeServer = null;
+          const errMsg = formatFriendlyError(server.name, rawStartError || 'xray ishga tushmadi');
+          this.lastError = errMsg;
+          return { success: false, error: errMsg };
+        }
+
+        if (this.xrayProcess !== xrayProc || this.manualDisconnect) {
+          await this.terminateProcess(xrayProc);
+          return { success: false, error: 'Ulanish bekor qilindi' };
+        }
+      }
+
+      const clashApiPort = await findFreePort(9091);
+      const configObj = await generateSingboxConfig(server, {
+        ...options,
+        clashApiPort,
+        upstreamSocksPort: useXraySidecar ? xrayPort : 0
+      });
 
       fs.writeFileSync(this.configPath, JSON.stringify(configObj, null, 2), 'utf-8');
 
@@ -180,7 +273,6 @@ class SingboxManager {
 
       let exited = false;
       let exitCode = null;
-      let rawStartError = '';
 
       proc.on('error', (err) => {
         exited = true;
@@ -196,18 +288,7 @@ class SingboxManager {
       proc.stderr.on('data', (data) => {
         const text = data.toString();
         console.warn(`[SingBox stderr]: ${text}`);
-        const lower = text.toLowerCase();
-        if (
-          lower.includes('fatal') ||
-          lower.includes('error') ||
-          lower.includes('reality verification failed') ||
-          lower.includes('i/o timeout') ||
-          lower.includes('connection refused') ||
-          lower.includes('reset by peer')
-        ) {
-          rawStartError = text.trim();
-          this.lastError = rawStartError;
-        }
+        captureCoreError(text);
       });
 
       proc.on('close', (code) => {
@@ -223,11 +304,13 @@ class SingboxManager {
         }
       });
 
-      await waitForLocalPort(this.mixedPort, 2500, () => exited);
+      await waitForLocalPort(this.mixedPort, 2500, () => exited || xrayExited);
       await sleep(200);
 
-      if (exited) {
+      if (exited || xrayExited) {
         if (this.process === proc) this.process = null;
+        if (this.xrayProcess === xrayProc) this.xrayProcess = null;
+        await Promise.all([this.terminateProcess(proc), this.terminateProcess(xrayProc)]);
         this.disableSystemProxy();
         this.stopTrafficMonitor();
         this.status = 'error';
@@ -238,27 +321,32 @@ class SingboxManager {
         return { success: false, error: errMsg };
       }
 
-      if (this.process !== proc) {
+      if (this.process !== proc || (useXraySidecar && this.xrayProcess !== xrayProc)) {
+        if (this.process === proc) this.process = null;
+        if (this.xrayProcess === xrayProc) this.xrayProcess = null;
+        await Promise.all([this.terminateProcess(proc), this.terminateProcess(xrayProc)]);
         return { success: false, error: 'Ulanish bekor qilindi' };
       }
 
       let latencyMs = 0;
       if (options.verifyTunnel !== false) {
         let health = await this.checkTunnelHealth(4500);
-        if (!health.ok && !exited && this.process === proc && health.reason === 'ECONNREFUSED') {
+        if (!health.ok && !exited && !xrayExited && this.process === proc && health.reason === 'ECONNREFUSED') {
           await sleep(300);
           health = await this.checkTunnelHealth(4500);
         }
 
-        if (!health.ok || exited || this.process !== proc) {
+        if (!health.ok || exited || xrayExited || this.process !== proc || (useXraySidecar && this.xrayProcess !== xrayProc)) {
           const errMsg = formatFriendlyError(server.name, rawStartError || this.lastError || health.reason);
           if (this.process === proc) this.process = null;
-          await this.terminateProcess(proc);
+          if (this.xrayProcess === xrayProc) this.xrayProcess = null;
+          await Promise.all([this.terminateProcess(proc), this.terminateProcess(xrayProc)]);
           this.stopTrafficMonitor();
           this.disableSystemProxy();
           this.status = 'disconnected';
           this.activeServer = null;
           this.connectionStartTime = null;
+          this.activeCore = 'sing-box';
           this.lastError = errMsg;
           return { success: false, error: errMsg };
         }
@@ -269,6 +357,7 @@ class SingboxManager {
       this.connectionStartTime = Date.now();
       this.lastError = null;
       this.clashApiPort = clashApiPort;
+      this.activeCore = useXraySidecar ? 'xray+sing-box' : 'sing-box';
 
       if (options.mode === 'system_proxy') {
         this.enableSystemProxy(this.mixedPort);
@@ -277,16 +366,20 @@ class SingboxManager {
       this.startTrafficMonitor(clashApiPort);
       this.startWatchdog();
 
-      return { success: true, latencyMs };
+      return { success: true, latencyMs, core: this.activeCore };
     } catch (err) {
       if (proc && this.process === proc) {
         this.process = null;
-        await this.terminateProcess(proc);
       }
+      if (xrayProc && this.xrayProcess === xrayProc) {
+        this.xrayProcess = null;
+      }
+      await Promise.all([this.terminateProcess(proc), this.terminateProcess(xrayProc)]);
       this.stopTrafficMonitor();
       this.disableSystemProxy();
       this.status = 'error';
       this.activeServer = null;
+      this.activeCore = 'sing-box';
       const errMsg = formatFriendlyError(server && server.name, err.message);
       this.lastError = errMsg;
       return { success: false, error: errMsg };
@@ -300,14 +393,17 @@ class SingboxManager {
     this.disableSystemProxy();
 
     const proc = this.process;
+    const xrayProc = this.xrayProcess;
     this.process = null; // detach first so the 'close' handler ignores it
-    await this.terminateProcess(proc);
+    this.xrayProcess = null;
+    await Promise.all([this.terminateProcess(proc), this.terminateProcess(xrayProc)]);
 
     this.status = 'disconnected';
     this.activeServer = null;
     this.connectionStartTime = null;
     this.reconnectAttempts = 0;
     this.clashApiPort = null;
+    this.activeCore = 'sing-box';
     this.dlBps = 0;
     this.ulBps = 0;
     return { success: true };
@@ -397,11 +493,25 @@ class SingboxManager {
     this.watchdogFailCount = 0;
 
     const timer = setInterval(async () => {
-      if (this.watchdogInterval !== timer || this.status !== 'connected' || !this.process || this.isReconnecting || this.manualDisconnect) return;
+      if (
+        this.watchdogInterval !== timer ||
+        this.status !== 'connected' ||
+        !this.process ||
+        (this.activeCore === 'xray+sing-box' && !this.xrayProcess) ||
+        this.isReconnecting ||
+        this.manualDisconnect
+      ) return;
       if (!this.autoReconnectEnabled) return;
 
       const health = await this.checkTunnelHealth(4000);
-      if (this.watchdogInterval !== timer || this.status !== 'connected' || !this.process || this.isReconnecting || this.manualDisconnect) return;
+      if (
+        this.watchdogInterval !== timer ||
+        this.status !== 'connected' ||
+        !this.process ||
+        (this.activeCore === 'xray+sing-box' && !this.xrayProcess) ||
+        this.isReconnecting ||
+        this.manualDisconnect
+      ) return;
       if (!health.ok) {
         this.watchdogFailCount++;
         console.warn(`[Watchdog] Health check failed (${this.watchdogFailCount}/2): ${health.reason || 'unknown'}`);
@@ -485,8 +595,10 @@ class SingboxManager {
       this.disableSystemProxy();
 
       const old = this.process;
+      const oldXray = this.xrayProcess;
       this.process = null;
-      await this.terminateProcess(old);
+      this.xrayProcess = null;
+      await Promise.all([this.terminateProcess(old), this.terminateProcess(oldXray)]);
       await sleep(500);
 
       // User pressed "disconnect" while we were waiting
@@ -622,6 +734,7 @@ class SingboxManager {
       ulBps,
       dlMBps: Number((dlBps / (1024 * 1024)).toFixed(2)),
       ulMBps: Number((ulBps / (1024 * 1024)).toFixed(2)),
+      core: isConnected ? this.activeCore : 'sing-box',
       error: this.lastError
     };
   }

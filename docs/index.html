@@ -1862,7 +1862,7 @@
       chip.classList.toggle('online', state.bridgeOnline);
       if (state.bridgeOnline) {
         sideText.textContent = 'Yadro ulandi (4040)';
-        detail.innerHTML = '<strong style="color:var(--green);">🟢 Ulangan (http://127.0.0.1:4040)</strong><br>Barcha ulanish, ping va tizim proksi amallari to‘g‘ridan-to‘g‘ri Windows <code>sing-box 1.14.4</code> yadrosi orqali ishlayapti.';
+        detail.innerHTML = '<strong style="color:var(--green);">🟢 Ulangan (http://127.0.0.1:4040)</strong><br>Barcha ulanish, ping va tizim proksi amallari <code>sing-box 1.14.4 + Xray 26.11 REALITY (X25519MLKEM768)</code> yadrosi orqali ishlayapti.';
       } else {
         sideText.textContent = 'Avtonom rejim';
         detail.innerHTML = '<strong style="color:var(--amber);">🟡 Avtonom rejim (Lokal bridge o‘chiq)</strong><br>Sozlamalar va serverlar brauzerda saqlanadi. Ushbu oynadan haqiqiy VPN yoqish uchun <code>ZedRay.bat</code> ni ishga tushiring yoki <code>ZedRay.exe</code> ilovasidan foydalaning.';
@@ -2015,7 +2015,7 @@
         const right = document.createElement('div');
         right.className = 'srv-right';
         const pingEl = document.createElement('span');
-        pingEl.className = 'ping-pill' + (srv.ping > 0 ? (srv.ping < 100 ? ' fast' : (srv.ping < 220 ? ' med' : ' slow')) : '');
+        pingEl.className = 'ping-pill' + (srv.ping > 0 ? (srv.ping < 600 ? ' fast' : (srv.ping < 1300 ? ' med' : ' slow')) : '');
         pingEl.textContent = srv.ping > 0 ? `${srv.ping} ms` : (srv.ping < 0 ? 'Timeout' : '—');
 
         const delBtn = document.createElement('button');

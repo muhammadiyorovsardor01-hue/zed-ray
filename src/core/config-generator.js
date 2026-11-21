@@ -52,7 +52,8 @@ async function generateSingboxConfig(server, options = {}) {
     mtu = 1400,   // Crucial: 1400 avoids fragmentation disconnections
     mixedPort = 20807,
     routingMode = 'rule', // 'rule' (bypass LAN/private), 'global'
-    clashApiPort = 0
+    clashApiPort = 0,
+    upstreamSocksPort = 0
   } = options;
 
   const serverIp = await resolveHostToIp(server.server);
@@ -79,8 +80,16 @@ async function generateSingboxConfig(server, options = {}) {
     });
   }
 
-  // Construct Outbound based on server type
-  const proxyOutbound = buildProxyOutbound(server, 'proxy');
+  // Construct Outbound: route through local Xray SOCKS5 sidecar when enabled
+  const proxyOutbound = Number.isInteger(upstreamSocksPort) && upstreamSocksPort > 0
+    ? {
+        type: 'socks',
+        tag: 'proxy',
+        server: '127.0.0.1',
+        server_port: upstreamSocksPort,
+        version: '5'
+      }
+    : buildProxyOutbound(server, 'proxy');
 
   const outbounds = [
     proxyOutbound,
