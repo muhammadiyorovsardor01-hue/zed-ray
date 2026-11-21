@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090B12">
+  <meta name="description" content="ZedRay PRO VPN — Sing-box 1.14.4 asosidagi tezkor VLESS Reality va WS+TLS VPN mijozi (Windows)">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>ZedRay PRO VPN · Sing-box 1.14.4 Windows Mijozi</title>
+  <style>
+    :root {
+      --bg: #090B12;
+      --bg-soft: #0D101B;
+      --card: #111524;
+      --card-2: #141A2E;
+      --border: #1F263D;
+      --border-bright: #2B3657;
+      --cyan: #00F2FE;
+      --blue: #3B82F6;
+      --purple: #A855F7;
+      --green: #10B981;
+      --amber: #F59E0B;
+      --red: #F87171;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+      --dim: #64748B;
+      --radius: 18px;
+      --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background:
+        radial-gradient(900px 500px at 12% -5%, rgba(0, 242, 254, 0.12), transparent 60%),
+        radial-gradient(800px 500px at 88% 8%, rgba(168, 85, 247, 0.11), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; }
+
+    .container {
+      width: 100%;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* HEADER */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(9, 11, 18, 0.82);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      height: 70px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+      flex-shrink: 0;
+    }
+    .core-pill {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--cyan);
+      background: #13223B;
+      border: 1px solid rgba(0, 242, 254, 0.45);
+      border-radius: 6px;
+      padding: 2px 7px;
+      letter-spacing: 0.04em;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .nav-links a:hover { color: var(--cyan); }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+      white-space: nowrap;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      color: #04101E;
+      box-shadow: 0 6px 24px rgba(0, 242, 254, 0.22);
+    }
+    .btn-primary:hover { box-shadow: 0 8px 28px rgba(0, 242, 254, 0.36); transform: translateY(-1px); }
+    .btn-glass {
+      background: #13192B;
+      color: var(--text);
+      border-color: var(--border-bright);
+    }
+    .btn-glass:hover { border-color: var(--cyan); color: var(--cyan); }
+    .btn-purple {
+      background: rgba(168, 85, 247, 0.15);
+      color: #E9D5FF;
+      border-color: rgba(168, 85, 247, 0.45);
+    }
+    .btn-purple:hover { background: rgba(168, 85, 247, 0.25); border-color: var(--purple); }
+
+    /* HERO */
+    .hero {
+      padding: 56px 0 36px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 38px;
+      align-items: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 242, 254, 0.08);
+      border: 1px solid rgba(0, 242, 254, 0.28);
+      color: var(--cyan);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+    }
+    h1 {
+      font-size: clamp(32px, 4.4vw, 52px);
+      line-height: 1.12;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+    .grad-text {
+      background: linear-gradient(90deg, var(--cyan), #60A5FA 55%, var(--purple));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero-sub {
+      color: var(--muted);
+      font-size: 16.5px;
+      max-width: 580px;
+      margin-bottom: 22px;
+    }
+    .cap-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 26px;
+    }
+    .cap-pill {
+      font-size: 12px;
+      font-weight: 700;
+      color: #CBD5E1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 7px 12px;
+    }
+    .hero-ctas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    /* INTERACTIVE DASHBOARD PREVIEW */
+    .preview-shell {
+      background: var(--bg-soft);
+      border: 1.5px solid var(--border-bright);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 40px rgba(0, 242, 254, 0.08);
+      max-width: 430px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .preview-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: #131726;
+      border: 1px solid #242B42;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+    .status-pill.connected {
+      color: var(--green);
+      border-color: rgba(16, 185, 129, 0.45);
+      background: rgba(16, 185, 129, 0.09);
+    }
+    .status-pill.connecting {
+      color: var(--amber);
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--dim);
+    }
+    .status-pill.connected .status-dot { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .status-pill.connecting .status-dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+
+    .sim-sec-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+      transition: border-color 0.25s ease;
+    }
+    .sim-sec-card.connected { border-color: var(--green); }
+    .sim-sec-title { font-size: 12px; font-weight: 800; color: var(--muted); }
+    .sim-sec-card.connected .sim-sec-title { color: var(--green); }
+    .sim-sec-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+    .mode-switch-btn {
+      background: #161D31;
+      border: 1px solid #283352;
+      color: var(--cyan);
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 6px 9px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .power-zone {
+      display: grid;
+      place-items: center;
+      padding: 14px 0 8px;
+      position: relative;
+    }
+    .power-ring {
+      width: 168px;
+      height: 168px;
+      border-radius: 50%;
+      border: 2px dashed #242E4C;
+      display: grid;
+      place-items: center;
+      transition: border-color 0.3s ease, transform 0.3s ease;
+    }
+    .power-ring.connected {
+      border-color: var(--cyan);
+      box-shadow: 0 0 36px rgba(0, 242, 254, 0.2);
+    }
+    .power-ring.connecting {
+      border-color: var(--amber);
+      animation: spinSlow 4s linear infinite;
+    }
+    @keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .power-btn {
+      width: 134px;
+      height: 134px;
+      border-radius: 50%;
+      border: 3.5px solid #2A3454;
+      background: linear-gradient(145deg, #171C2E, #0F1320);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      transition: all 0.25s ease;
+    }
+    .power-btn:hover { border-color: var(--cyan); transform: scale(1.02); }
+    .power-btn.connected {
+      background: linear-gradient(145deg, var(--cyan), #2563EB);
+      border-color: #7DD3FC;
+      color: #FFFFFF;
+      box-shadow: 0 0 32px rgba(0, 242, 254, 0.35);
+    }
+    .power-btn.connecting {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .power-label { font-size: 13.5px; font-weight: 800; letter-spacing: 0.04em; }
+
+    .sim-timer {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 24px;
+      font-weight: 800;
+      margin: 4px 0 12px;
+      letter-spacing: 0.04em;
+    }
+
+    .sim-net-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .sim-speeds {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .spd-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; }
+    .spd-lbl.dl { color: var(--cyan); }
+    .spd-lbl.ul { color: var(--purple); }
+    .spd-val { font-size: 16px; font-weight: 800; margin-top: 2px; }
+    #simCanvas {
+      width: 100%;
+      height: 52px;
+      display: block;
+      background: #0B0E18;
+      border-radius: 10px;
+    }
+
+    .sim-server-row {
+      background: #131829;
+      border: 1px solid #242D4A;
+      border-radius: 14px;
+      padding: 11px 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .sim-server-row:hover { border-color: var(--cyan); }
+    .sim-srv-name { font-size: 13px; font-weight: 700; }
+    .sim-srv-meta { font-size: 11px; color: var(--muted); }
+    .sim-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 10px;
+    }
+
+    /* SECTIONS */
+    section.block { padding: 54px 0; }
+    .sec-head {
+      margin-bottom: 28px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .sec-head h2 {
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .sec-head p { color: var(--muted); max-width: 600px; font-size: 15px; }
+
+    /* FEATURES */
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .feat-card {
+      background: rgba(17, 21, 36, 0.9);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    .feat-card:hover { border-color: rgba(0, 242, 254, 0.55); transform: translateY(-2px); }
+    .feat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #16223D;
+      border: 1px solid #263861;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+    .feat-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 7px; }
+    .feat-card p { font-size: 13.5px; color: var(--muted); }
+
+    /* CONFIGURATOR */
+    .cfg-panel {
+      background: var(--card);
+      border: 1px solid var(--border-bright);
+      border-radius: 22px;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1fr 1.05fr;
+      gap: 22px;
+    }
+    .field-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--cyan);
+      margin-bottom: 8px;
+    }
+    textarea.vless-box {
+      width: 100%;
+      min-height: 112px;
+      resize: vertical;
+      background: #090B12;
+      color: var(--text);
+      border: 1px solid var(--border-bright);
+      border-radius: 14px;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      outline: none;
+    }
+    textarea.vless-box:focus { border-color: var(--cyan); }
+    .cfg-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 16px;
+    }
+    .opt-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .opt-group {
+      background: #0C101C;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .opt-title { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .seg button, .mtu-select {
+      background: #141A2D;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 9px;
+      padding: 7px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .seg button.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(59, 130, 246, 0.22));
+      border-color: var(--cyan);
+      color: var(--text);
+    }
+    .mtu-select { width: 100%; color: var(--text); outline: none; }
+
+    .parsed-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .p-badge {
+      background: #0D1323;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+    .p-badge b { color: var(--text); }
+    .cfg-error {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(248, 113, 113, 0.12);
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      color: #FCA5A5;
+      font-size: 12.5px;
+      display: none;
+    }
+
+    .json-wrap {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    pre.json-out {
+      flex: 1;
+      min-height: 310px;
+      max-height: 440px;
+      overflow: auto;
+      background: #07090F;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: #A5F3FC;
+    }
+
+    /* QUICKSTART & SHORTCUTS */
+    .guide-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .guide-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .step-num {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--cyan);
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 7px;
+      padding: 3px 9px;
+      margin-bottom: 10px;
+    }
+    .guide-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+    .guide-card p, .guide-card li { font-size: 13.5px; color: var(--muted); }
+    .guide-card ul { padding-left: 18px; display: grid; gap: 6px; margin-top: 8px; }
+    code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: #090C15;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 6px;
+      color: #BAE6FD;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0 38px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .zero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #6EE7B7;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* MODAL */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(5, 7, 14, 0.78);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border: 1.5px solid var(--cyan);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+    }
+    .modal-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .modal-top h3 { font-size: 18px; font-weight: 800; }
+    .modal-step {
+      background: #0B0E18;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #CBD5E1;
+    }
+    .modal-step strong { color: var(--cyan); display: block; margin-bottom: 4px; }
+
+    @media (max-width: 960px) {
+      .hero-grid, .cfg-panel { grid-template-columns: 1fr; }
+      .feat-grid, .guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .nav-links { display: none; }
+    }
+    @media (max-width: 620px) {
+      .feat-grid, .guide-grid, .opt-grid { grid-template-columns: 1fr; }
+      .topbar-inner { height: 64px; }
+      .btn { padding: 9px 12px; font-size: 12.5px; }
+      .hero { padding-top: 34px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- STICKY HEADER -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a href="#" class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <polygon points="14,2 6,13 12,13 10,22 19,10 13,10" fill="#FFFFFF"/>
+          </svg>
+        </span>
+        <span>ZedRay</span>
+        <span class="core-pill">CORE 1.14</span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="#features">Imkoniyatlar</a>
+        <a href="#configurator">Konfigurator</a>
+        <a href="#quickstart">O‘rnatish</a>
+      </nav>
+
+      <div class="header-actions">
+        <button class="btn btn-purple" id="installBtn" type="button">📲 Shortcut / O‘rnatish</button>
+        <a class="btn btn-glass" href="https://github.com/muhammadiyorovsardor01-hue/zed-ray" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO SECTION -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <div class="eyebrow">
+            <span class="eyebrow-dot"></span>
+            <span>Windows uchun Sing-box 1.14.4 VPN &amp; Proksi Mijozi</span>
+          </div>
+          <h1>Uzilishlarsiz <span class="grad-text">VLESS Reality</span> va Cloudflare WS+TLS himoyasi</h1>
+          <p class="hero-sub">
+            ZedRay PRO — Windows uchun maxsus ishlab chiqilgan yengil va tezkor VPN mijozi. WebSocket + TLS (ALPN), Smart Auto zaxira serverga o‘tish va jonli tunnel tekshiruvi bilan internet uzilib qolmaydi.
+          </p>
+
+          <div class="cap-pills">
+            <span class="cap-pill">⚡ Sing-box 1.14.4</span>
+            <span class="cap-pill">🛡️ VLESS Reality + WS/TLS</span>
+            <span class="cap-pill">🔄 Smart Auto Failover</span>
+            <span class="cap-pill">🌐 System Proxy &amp; TUN</span>
+          </div>
+
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="https://github.com/muhammadiyorovsardor01-hue/zed-ray" target="_blank" rel="noopener noreferrer">⬇ GitHub’dan olish</a>
+            <button class="btn btn-purple" id="heroInstallBtn" type="button">🖥 Shortcut sifatida o‘rnatish</button>
+            <a class="btn btn-glass" href="#configurator">⚙ VLESS Konfigurator</a>
+          </div>
+        </div>
+
+        <!-- INTERACTIVE ZEDRAY PREVIEW CARD -->
+        <div class="preview-shell" aria-label="ZedRay PRO Interfeys Namunasi">
+          <div class="preview-top">
+            <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;">
+              <span>ZedRay</span>
+              <span class="core-pill">CORE 1.14</span>
+            </div>
+            <div class="status-pill" id="simStatusPill">
+              <span class="status-dot"></span>
+              <span id="simStatusText">O‘CHIRILGAN</span>
+            </div>
+          </div>
+
+          <div class="sim-sec-card" id="simSecCard">
+            <div>
+              <div class="sim-sec-title" id="simSecTitle">HIMOYA O‘CHIRILGAN</div>
+              <div class="sim-sec-sub" id="simSecSub">Sinash uchun tugmani bosing · MTU 1400</div>
+            </div>
+            <button class="mode-switch-btn" id="simModeBtn" type="button">SYSTEM PROXY</button>
+          </div>
+
+          <div class="power-zone">
+            <div class="power-ring" id="simRing">
+              <button class="power-btn" id="simPowerBtn" type="button">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                  <polygon points="14,2 6,13 12,13 10,22 19,10 13,10" fill="currentColor"/>
+                </svg>
+                <span class="power-label" id="simPowerLabel">ULASH</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="sim-timer" id="simTimer">00:00:00</div>
+
+          <div class="sim-net-card">
+            <div class="sim-speeds">
+              <div>
+                <div class="spd-lbl dl">↓ YUKLAB OLISH</div>
+                <div class="spd-val" id="simDl">0.0 MB/s</div>
+              </div>
+              <div>
+                <div class="spd-lbl ul">↑ UZATISH</div>
+                <div class="spd-val" id="simUl">0.0 MB/s</div>
+              </div>
+            </div>
+            <canvas id="simCanvas" width="380" height="52"></canvas>
+          </div>
+
+          <div class="sim-server-row" id="simServerRow" title="Server rejimini almashtirish">
+            <div>
+              <div class="sim-srv-name" id="simSrvName">⚡ Auto · VLESS WS+TLS Node</div>
+              <div class="sim-srv-meta" id="simSrvMeta">Smart Auto Failover · HTTP/1.1 ALPN</div>
+            </div>
+            <span class="mode-switch-btn">Almashtirish →</span>
+          </div>
+          <div class="sim-hint">Interaktiv namuna — ulanish animatsiyasini tekshirish uchun ⚡ tugmasini bosing</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES SECTION -->
+    <section class="block" id="features">
+      <div class="container">
+        <div class="sec-head">
+          <div>
+            <h2>Asosiy Texnik Imkoniyatlar</h2>
+            <p>ZedRay’dagi barcha ulanish muammolari tubdan qayta ishlanib, zamonaviy `sing-box 1.14.4` arxitekturasiga o‘tkazildi.</p>
+          </div>
+        </div>
+
+        <div class="feat-grid">
+          <article class="feat-card">
+            <div class="feat-icon">🚀</div>
+            <h3>Sing-box 1.14.4 yadrosi</h3>
+            <p>Yangi avlod DoH (`type: "https"`), `hijack-dns`, `sniff` rule actionlari va `default_domain_resolver` bilan xatosiz ishlaydi.</p>
+          </article>
+          <article class="feat-card">
+            <div class="feat-icon">☁️</div>
+            <h3>VLESS Reality + WS/TLS + ALPN</h3>
+            <p>Reality TCP bilan birga Cloudflare CDN (`WS + TLS`, `/cdn-ws`, `Host`, `alpn: ["http/1.1"]`, `?ed=`) serverlarini to‘liq qo‘llab-quvvatlaydi.</p>
+          </article>
+          <article class="feat-card">
+            <div class="feat-icon">🔁</div>
+            <h3>Smart Auto Failover</h3>
+            <p>Ulanishdan oldin `127.0.0.1:20807` porti va jonli tunnel (`generate_204`) tekshiriladi. Bitta server javob bermasa avtomatik keyingisiga o‘tadi.</p>
+          </article>
+          <article class="feat-card">
+            <div class="feat-icon">🛡️</div>
+            <h3>System Proxy &amp; TUN (WinTun)</h3>
+            <p>WinINet (`InternetSetOption`) orqali proksi bir zumda kuchga kiradi; TUN rejimi esa Administrator huquqini avtomatik so‘rab butun tizimni qamraydi.</p>
+          </article>
+          <article class="feat-card">
+            <div class="feat-icon">🩺</div>
+            <h3>Watchdog &amp; MTU 1400</h3>
+            <p>Har 6 soniyada tunnel salomatligi nazorat qilinadi. 1400 MTU paketlar maydalanishini kamaytiradi, uzilsa avtomatik qayta ulanadi.</p>
+          </article>
+          <article class="feat-card">
+            <div class="feat-icon">🔒</div>
+            <h3>Zero Secret Leakage</h3>
+            <p>Shaxsiy server IP, UUID va obuna havolalaringiz faqat o‘z kompyuteringizda qoladi. Konfigurator esa 100% brauzer ichida ishlaydi.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTERACTIVE VLESS CONFIGURATOR -->
+    <section class="block" id="configurator">
+      <div class="container">
+        <div class="sec-head">
+          <div>
+            <h2>VLESS → Sing-box 1.14.4 Konfigurator</h2>
+            <p>Istalgan `vless://...` havolasini kiriting — brauzeringizning o‘zida (hech qayerga yubormasdan) tayyor `sing-box 1.14.4` JSON konfiguratsiyasini oling.</p>
+          </div>
+        </div>
+
+        <div class="cfg-panel">
+          <div>
+            <div class="field-label">
+              <span>VLESS Havola (vless://...)</span>
+              <span style="color:var(--muted);font-weight:600;">100% Lokal tahlil</span>
+            </div>
+            <textarea class="vless-box" id="vlessInput" placeholder="vless://uuid@host:443?security=tls&amp;type=ws&amp;path=%2Fcdn-ws&amp;host=cdn.example.com&amp;sni=cdn.example.com&amp;alpn=http%2F1.1#Server"></textarea>
+
+            <div class="cfg-toolbar">
+              <button class="btn btn-primary" id="sampleBtn" type="button">✨ Namuna qo‘yish</button>
+              <button class="btn btn-glass" id="clearBtn" type="button">✕ Tozalash</button>
+            </div>
+
+            <div class="opt-grid">
+              <div class="opt-group">
+                <div class="opt-title">ULANISH REJIMI</div>
+                <div class="seg" id="modeSeg">
+                  <button type="button" data-val="system_proxy" class="active">System Proxy</button>
+                  <button type="button" data-val="tun">TUN Rejimi</button>
+                </div>
+              </div>
+              <div class="opt-group">
+                <div class="opt-title">MARSHRUTLASH</div>
+                <div class="seg" id="routeSeg">
+                  <button type="button" data-val="rule" class="active">Smart Bypass</button>
+                  <button type="button" data-val="global">Global Tunnel</button>
+                </div>
+              </div>
+              <div class="opt-group" style="grid-column: 1 / -1;">
+                <div class="opt-title">OPTIMAL MTU HAJMI</div>
+                <select class="mtu-select" id="mtuSelect">
+                  <option value="1400" selected>1400 (Optimal · Tavsiya)</option>
+                  <option value="1280">1280 (Mobil / Sekin tarmoq)</option>
+                  <option value="1500">1500 (Standart provayder)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="parsed-badges" id="parsedBadges"></div>
+            <div class="cfg-error" id="cfgError"></div>
+          </div>
+
+          <div class="json-wrap">
+            <div class="field-label">
+              <span>Sing-box 1.14.4 Konfiguratsiyasi</span>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-glass" id="copyJsonBtn" type="button" style="padding:6px 11px;font-size:12px;">📋 Nusxalash</button>
+                <button class="btn btn-primary" id="downloadJsonBtn" type="button" style="padding:6px 11px;font-size:12px;">⬇ config.json</button>
+              </div>
+            </div>
+            <pre class="json-out" id="jsonOutput"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUICKSTART & SHORTCUT GUIDE -->
+    <section class="block" id="quickstart">
+      <div class="container">
+        <div class="sec-head">
+          <div>
+            <h2>Tezkor Boshlash va Shortcut Qilish</h2>
+            <p>Desktop ilovani ham, ushbu veb-saytni ham ish stolingizga bitta bosish bilan ochiladigan yorliq (shortcut) qilib oling.</p>
+          </div>
+        </div>
+
+        <div class="guide-grid">
+          <article class="guide-card">
+            <span class="step-num">1-QADAM · WINDOWS ILOVA</span>
+            <h3>ZedRay.exe ni ishga tushirish</h3>
+            <p>Ish stolingizdagi <code>ZedRay</code> yorlig‘ini oching. Agar kompyuteringizda Hiddify yoqilgan bo‘lsa, avval uni o‘chiring.</p>
+            <ul>
+              <li>Oddiy brauzer va Telegram uchun <strong>System Proxy</strong> yetarli.</li>
+              <li>Barcha dastur va o‘yinlar uchun <strong>Sozlama → TUN Rejimi</strong>ni tanlang (Admin ruxsati so‘raydi).</li>
+            </ul>
+          </article>
+
+          <article class="guide-card">
+            <span class="step-num">2-QADAM · CHROME / EDGE</span>
+            <h3>Saytni Windows Shortcut qilish</h3>
+            <p>Ushbu saytni alohida mustaqil ilova oynasidek saqlab qo‘yishingiz mumkin:</p>
+            <ul>
+              <li>Yuqoridagi <strong>📲 Shortcut / O‘rnatish</strong> tugmasini bosing.</li>
+              <li>Yoki brauzerda <code>⋮ → Cast, save, and share → Create shortcut</code> / <code>Install app</code> ni tanlang.</li>
+            </ul>
+          </article>
+
+          <article class="guide-card">
+            <span class="step-num">3-QADAM · MOBIL TELEFON</span>
+            <h3>Android / iPhone ekraniga qo‘shish</h3>
+            <p>Saytni GitHub Pages yoki Vercel orqali ochganda telefoningizda PWA sifatida o‘rnatiladi:</p>
+            <ul>
+              <li><strong>Android (Chrome):</strong> <code>⋮ → Add to Home screen / Install app</code>.</li>
+              <li><strong>iPhone (Safari):</strong> Ulashish belgisi → <code>Add to Home Screen</code>.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <div>
+        <strong>ZedRay PRO VPN</strong> · Core: <a href="https://sing-box.sagernet.org/" target="_blank" rel="noopener noreferrer" style="color:var(--cyan);">sing-box 1.14.4</a> ·
+        <a href="https://github.com/muhammadiyorovsardor01-hue/zed-ray" target="_blank" rel="noopener noreferrer" style="color:var(--muted);text-decoration:underline;">GitHub Repozitoriy</a>
+      </div>
+      <div class="zero-badge">🔒 Zero Secret Leakage · Shaxsiy ma’lumotlar brauzerdan chiqmaydi</div>
+    </div>
+  </footer>
+
+  <!-- PWA / SHORTCUT INSTALL MODAL -->
+  <div class="modal-backdrop" id="installModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="modal-top">
+        <h3 id="modalTitle">📲 Saytni Shortcut Qilish</h3>
+        <button class="btn btn-glass" id="closeModalBtn" type="button" style="padding:6px 10px;font-size:12px;">✕ Yopish</button>
+      </div>
+      <div class="modal-step">
+        <strong>1. Windows (Chrome / Edge):</strong>
+        Yuqori o‘ng burchakdagi <code>⋮</code> menyuni bosing → <code>Cast, save, and share</code> → <code>Create shortcut...</code> (yoki manzil satridagi O‘rnatish belgisini bosing) va <em>Open as window</em> ni belgilang.
+      </div>
+      <div class="modal-step">
+        <strong>2. Android / iPhone:</strong>
+        Sayt <code>https://</code> manzilda ochilganda brauzer menyusidan <code>Add to Home Screen</code> / <code>Install app</code> tugmasini bosing — asosiy ekranda ZedRay belgisi bilan paydo bo‘ladi.
+      </div>
+      <div class="modal-step" style="margin-bottom:0;">
+        <strong>3. Tayyor ish stoli yorlig‘i:</strong>
+        Windows ish stolida <code>ZedRay</code> (ilova) va <code>ZedRay Sayt</code> yorliqlari allaqachon yaratib qo‘yilgan.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================= 1. INTERACTIVE DASHBOARD PREVIEW =================
+    const simPowerBtn = document.getElementById('simPowerBtn');
+    const simPowerLabel = document.getElementById('simPowerLabel');
+    const simRing = document.getElementById('simRing');
+    const simStatusPill = document.getElementById('simStatusPill');
+    const simStatusText = document.getElementById('simStatusText');
+    const simSecCard = document.getElementById('simSecCard');
+    const simSecTitle = document.getElementById('simSecTitle');
+    const simSecSub = document.getElementById('simSecSub');
+    const simTimer = document.getElementById('simTimer');
+    const simDl = document.getElementById('simDl');
+    const simUl = document.getElementById('simUl');
+    const simModeBtn = document.getElementById('simModeBtn');
+    const simServerRow = document.getElementById('simServerRow');
+    const simSrvName = document.getElementById('simSrvName');
+    const simSrvMeta = document.getElementById('simSrvMeta');
+    const simCanvas = document.getElementById('simCanvas');
+    const sCtx = simCanvas.getContext('2d');
+
+    let simState = 'off'; // 'off' | 'connecting' | 'on'
+    let simMode = 'SYSTEM PROXY';
+    let simSeconds = 0;
+    let simHistory = Array(30).fill(0);
+    let simTicks = null;
+    let simSrvIdx = 0;
+    const simServers = [
+      { name: '⚡ Auto · VLESS WS+TLS Node', meta: 'Smart Auto Failover · HTTP/1.1 ALPN', sec: 'WS+TLS' },
+      { name: '🛡️ VLESS Reality Node', meta: 'TCP · uTLS Chrome · Smart Bypass', sec: 'REALITY' }
+    ];
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function drawSimGraph() {
+      const w = simCanvas.width;
+      const h = simCanvas.height;
+      sCtx.clearRect(0, 0, w, h);
+      const max = Math.max(24, ...simHistory);
+      const step = w / (simHistory.length - 1);
+
+      sCtx.beginPath();
+      simHistory.forEach((v, i) => {
+        const x = i * step;
+        const y = h - (v / max) * (h - 10) - 4;
+        if (i === 0) sCtx.moveTo(x, y);
+        else sCtx.lineTo(x, y);
+      });
+      sCtx.strokeStyle = '#00F2FE';
+      sCtx.lineWidth = 2.2;
+      sCtx.stroke();
+
+      sCtx.lineTo(w, h);
+      sCtx.lineTo(0, h);
+      sCtx.closePath();
+      const grad = sCtx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(0, 242, 254, 0.28)');
+      grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
+      sCtx.fillStyle = grad;
+      sCtx.fill();
+    }
+
+    function renderSim() {
+      simStatusPill.className = 'status-pill' + (simState === 'on' ? ' connected' : (simState === 'connecting' ? ' connecting' : ''));
+      simRing.className = 'power-ring' + (simState === 'on' ? ' connected' : (simState === 'connecting' ? ' connecting' : ''));
+      simPowerBtn.className = 'power-btn' + (simState === 'on' ? ' connected' : (simState === 'connecting' ? ' connecting' : ''));
+      simSecCard.className = 'sim-sec-card' + (simState === 'on' ? ' connected' : '');
+
+      if (simState === 'on') {
+        simStatusText.textContent = 'HIMOYALANGAN';
+        simPowerLabel.textContent = 'UZISH';
+        simSecTitle.textContent = 'HIMOYA YOQILGAN · VLESS ' + simServers[simSrvIdx].sec;
+        simSecSub.textContent = 'Shifrlangan tunnel faol · MTU 1400';
+      } else if (simState === 'connecting') {
+        simStatusText.textContent = 'ULANMOQDA...';
+        simPowerLabel.textContent = 'KUTING...';
+        simSecTitle.textContent = 'TUNNEL TEKSHIRILMOQDA...';
+        simSecSub.textContent = '127.0.0.1:20807 · Jonli proksi sinovi';
+      } else {
+        simStatusText.textContent = 'O‘CHIRILGAN';
+        simPowerLabel.textContent = 'ULASH';
+        simSecTitle.textContent = 'HIMOYA O‘CHIRILGAN';
+        simSecSub.textContent = 'Sinash uchun tugmani bosing · MTU 1400';
+        simSeconds = 0;
+        simTimer.textContent = '00:00:00';
+        simDl.textContent = '0.0 MB/s';
+        simUl.textContent = '0.0 MB/s';
+        simHistory = Array(30).fill(0);
+      }
+      drawSimGraph();
+    }
+
+    simPowerBtn.addEventListener('click', () => {
+      if (simState === 'on' || simState === 'connecting') {
+        simState = 'off';
+        if (simTicks) { clearInterval(simTicks); simTicks = null; }
+        renderSim();
+        return;
+      }
+      simState = 'connecting';
+      renderSim();
+      setTimeout(() => {
+        if (simState !== 'connecting') return;
+        simState = 'on';
+        simSeconds = 0;
+        renderSim();
+        if (simTicks) clearInterval(simTicks);
+        simTicks = setInterval(() => {
+          simSeconds++;
+          const hh = Math.floor(simSeconds / 3600);
+          const mm = Math.floor((simSeconds % 3600) / 60);
+          const ss = simSeconds % 60;
+          simTimer.textContent = `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+          const dl = (Math.random() * 14 + 6.5).toFixed(1);
+          const ul = (Math.random() * 3.8 + 1.1).toFixed(1);
+          simDl.textContent = `${dl} MB/s`;
+          simUl.textContent = `${ul} MB/s`;
+          simHistory.shift();
+          simHistory.push(parseFloat(dl));
+          drawSimGraph();
+        }, 1000);
+      }, 900);
+    });
+
+    simModeBtn.addEventListener('click', () => {
+      simMode = simMode === 'SYSTEM PROXY' ? 'TUN (ADMIN)' : 'SYSTEM PROXY';
+      simModeBtn.textContent = simMode;
+    });
+
+    simServerRow.addEventListener('click', () => {
+      simSrvIdx = (simSrvIdx + 1) % simServers.length;
+      simSrvName.textContent = simServers[simSrvIdx].name;
+      simSrvMeta.textContent = simServers[simSrvIdx].meta;
+      renderSim();
+    });
+    renderSim();
+
+    // ================= 2. VLESS -> SING-BOX 1.14.4 CONFIGURATOR =================
+    const SAMPLE_VLESS = 'vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls&type=ws&path=%2Fcdn-ws&host=cdn.example.com&sni=cdn.example.com&fp=chrome&alpn=http%2F1.1#Example%20WS%20Node';
+    const vlessInput = document.getElementById('vlessInput');
+    const jsonOutput = document.getElementById('jsonOutput');
+    const parsedBadges = document.getElementById('parsedBadges');
+    const cfgError = document.getElementById('cfgError');
+    const mtuSelect = document.getElementById('mtuSelect');
+    let cfgMode = 'system_proxy';
+    let cfgRoute = 'rule';
+
+    function isIpAddress(host) {
+      return /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(':');
+    }
+
+    function parseVless(link) {
+      const trimmed = (link || '').trim();
+      if (!trimmed.toLowerCase().startsWith('vless://')) {
+        throw new Error("Havola 'vless://' bilan boshlanishi kerak.");
+      }
+      const url = new URL(trimmed);
+      const uuid = decodeURIComponent(url.username || '');
+      const host = (url.hostname || '').replace(/^\[|\]$/g, '');
+      const port = parseInt(url.port, 10) || 443;
+      if (!uuid || !host) {
+        throw new Error("VLESS havolada UUID yoki server manzili topilmadi.");
+      }
+      const p = Object.fromEntries(url.searchParams.entries());
+      const net = (p.type || 'tcp').toLowerCase();
+      const pbk = p.pbk || '';
+      const sec = (p.security || (pbk ? 'reality' : 'none')).toLowerCase();
+      const wsHost = p.host || '';
+      const sni = p.sni || wsHost || host;
+      const fp = p.fp || 'chrome';
+      const sid = p.sid || '';
+      const flow = p.flow || '';
+      const rawPath = p.path || p.serviceName || '';
+      const alpn = p.alpn || (net === 'ws' && sec === 'tls' ? 'http/1.1' : '');
+      const name = url.hash ? decodeURIComponent(url.hash.slice(1)) : `${host}:${port}`;
+
+      return { name, uuid, host, port, net, sec, wsHost, sni, fp, pbk, sid, flow, rawPath, alpn };
+    }
+
+    function buildSingbox114(srv) {
+      const mtu = parseInt(mtuSelect.value, 10) || 1400;
+      const inbounds = [
+        { type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: 20807 }
+      ];
+      if (cfgMode === 'tun') {
+        inbounds.push({
+          type: 'tun',
+          tag: 'tun-in',
+          interface_name: 'ZedRayTun',
+          address: ['172.19.0.1/30'],
+          mtu,
+          auto_route: true,
+          strict_route: true,
+          stack: 'gvisor'
+        });
+      }
+
+      const proxy = {
+        type: 'vless',
+        tag: 'proxy',
+        server: srv.host,
+        server_port: srv.port,
+        uuid: srv.uuid,
+        packet_encoding: 'xudp'
+      };
+      if (srv.flow) proxy.flow = srv.flow;
+
+      if (srv.sec === 'reality') {
+        proxy.tls = {
+          enabled: true,
+          server_name: srv.sni,
+          utls: { enabled: true, fingerprint: srv.fp },
+          reality: { enabled: true, public_key: srv.pbk, short_id: srv.sid }
+        };
+      } else if (srv.sec === 'tls') {
+        const alpnArr = srv.alpn.split(',').map(x => x.trim()).filter(Boolean);
+        proxy.tls = {
+          enabled: true,
+          server_name: srv.sni,
+          utls: { enabled: true, fingerprint: srv.fp }
+        };
+        if (alpnArr.length) proxy.tls.alpn = alpnArr;
+      }
+
+      if (srv.net === 'ws') {
+        const raw = srv.rawPath || '/';
+        const edMatch = raw.match(/[?&]ed=(\d+)/i);
+        const cleanPath = raw.replace(/[?&]ed=\d+/i, '') || '/';
+        const hostHdr = srv.wsHost || srv.sni || srv.host;
+        proxy.transport = {
+          type: 'ws',
+          path: cleanPath,
+          headers: { Host: hostHdr }
+        };
+        if (edMatch) {
+          proxy.transport.max_early_data = parseInt(edMatch[1], 10);
+          proxy.transport.early_data_header_name = 'Sec-WebSocket-Protocol';
+        }
+      } else if (srv.net === 'grpc') {
+        proxy.transport = { type: 'grpc', service_name: srv.rawPath || '' };
+      } else if (srv.net === 'httpupgrade') {
+        proxy.transport = {
+          type: 'httpupgrade',
+          host: srv.wsHost || srv.sni || srv.host,
+          path: srv.rawPath || '/'
+        };
+      }
+
+      const bypassRule = isIpAddress(srv.host)
+        ? { ip_cidr: [`${srv.host}/${srv.host.includes(':') ? 128 : 32}`], outbound: 'direct' }
+        : { domain: [srv.host], outbound: 'direct' };
+
+      const routeTail = cfgRoute === 'rule'
+        ? { ip_is_private: true, outbound: 'direct' }
+        : { ip_cidr: ['127.0.0.0/8', '::1/128'], outbound: 'direct' };
+
+      return {
+        log: { level: 'info', timestamp: true },
+        dns: {
+          servers: [
+            { tag: 'dns-remote', type: 'https', server: '1.1.1.1', server_port: 443, path: '/dns-query', detour: 'proxy' },
+            { tag: 'dns-direct', type: 'local' }
+          ],
+          final: 'dns-remote',
+          strategy: 'ipv4_only'
+        },
+        inbounds,
+        outbounds: [proxy, { type: 'direct', tag: 'direct' }],
+        route: {
+          rules: [
+            { action: 'sniff' },
+            { protocol: 'dns', action: 'hijack-dns' },
+            bypassRule,
+            routeTail
+          ],
+          auto_detect_interface: true,
+          default_domain_resolver: 'dns-direct',
+          final: 'proxy'
+        }
+      };
+    }
+
+    function updateConfigurator() {
+      const val = vlessInput.value.trim();
+      parsedBadges.innerHTML = '';
+      if (!val) {
+        cfgError.style.display = 'none';
+        jsonOutput.textContent = '// VLESS havolani kiriting yoki "Namuna qo‘yish" tugmasini bosing';
+        return;
+      }
+      try {
+        const srv = parseVless(val);
+        cfgError.style.display = 'none';
+        const items = [
+          ['Host', `${srv.host}:${srv.port}`],
+          ['Network', srv.net.toUpperCase()],
+          ['Security', srv.sec.toUpperCase()],
+          ['SNI', srv.sni],
+          ['ALPN', srv.alpn || '—'],
+          ['Path', srv.rawPath || '—']
+        ];
+        items.forEach(([k, v]) => {
+          const span = document.createElement('span');
+          span.className = 'p-badge';
+          span.innerHTML = `${k}: <b></b>`;
+          span.querySelector('b').textContent = v;
+          parsedBadges.appendChild(span);
+        });
+        jsonOutput.textContent = JSON.stringify(buildSingbox114(srv), null, 2);
+      } catch (err) {
+        cfgError.textContent = err.message;
+        cfgError.style.display = 'block';
+        jsonOutput.textContent = '// Xatolik: to‘g‘ri VLESS havolasini kiriting';
+      }
+    }
+
+    document.getElementById('sampleBtn').addEventListener('click', () => {
+      vlessInput.value = SAMPLE_VLESS;
+      updateConfigurator();
+    });
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      vlessInput.value = '';
+      updateConfigurator();
+    });
+    vlessInput.addEventListener('input', updateConfigurator);
+    mtuSelect.addEventListener('change', updateConfigurator);
+
+    document.querySelectorAll('#modeSeg button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#modeSeg button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfgMode = btn.dataset.val;
+        updateConfigurator();
+      });
+    });
+    document.querySelectorAll('#routeSeg button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#routeSeg button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfgRoute = btn.dataset.val;
+        updateConfigurator();
+      });
+    });
+
+    const copyBtn = document.getElementById('copyJsonBtn');
+    copyBtn.addEventListener('click', async () => {
+      if (!jsonOutput.textContent.trim().startsWith('{')) return;
+      try {
+        await navigator.clipboard.writeText(jsonOutput.textContent);
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = '✓ Nusxalandi!';
+        setTimeout(() => { copyBtn.textContent = orig; }, 1600);
+      } catch {}
+    });
+
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+      if (!jsonOutput.textContent.trim().startsWith('{')) return;
+      const blob = new Blob([jsonOutput.textContent], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'config.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    vlessInput.value = SAMPLE_VLESS;
+    updateConfigurator();
+
+    // ================= 3. PWA SHORTCUT / INSTALL PROMPT =================
+    let deferredPrompt = null;
+    const installModal = document.getElementById('installModal');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    async function triggerInstall() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+      } else {
+        installModal.classList.add('open');
+      }
+    }
+
+    document.getElementById('installBtn').addEventListener('click', triggerInstall);
+    document.getElementById('heroInstallBtn').addEventListener('click', triggerInstall);
+    document.getElementById('closeModalBtn').addEventListener('click', () => installModal.classList.remove('open'));
+    installModal.addEventListener('click', (e) => {
+      if (e.target === installModal) installModal.classList.remove('open');
+    });
+
+    if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
