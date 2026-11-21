@@ -1,30 +1,88 @@
 {
-  "name": "ZedRay PRO VPN",
+  "name": "ZedRay PRO",
   "short_name": "ZedRay",
-  "description": "Sing-box 1.14.4 asosidagi tezkor va barqaror VLESS Reality / WS+TLS VPN mijozi (Windows)",
-  "start_url": "./",
+  "id": "/zed-ray/",
+  "start_url": "./index.html",
   "scope": "./",
+  "description": "Sing-box 1.14.4 asosidagi tezkor VLESS Reality va WS+TLS VPN boshqaruv ilovasi",
+  "lang": "uz",
+  "dir": "ltr",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#090B12",
   "theme_color": "#090B12",
-  "lang": "uz",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Boshqaruv",
+      "short_name": "Boshqaruv",
+      "url": "./index.html#dashboard",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Serverlar",
+      "short_name": "Serverlar",
+      "url": "./index.html#servers",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Konfigurator",
+      "short_name": "Konfigurator",
+      "url": "./index.html#config",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
