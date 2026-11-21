@@ -22,6 +22,28 @@ async function resolveHostToIp(host) {
 }
 
 /**
+ * Builds a sing-box 1.14.4 compatible proxy outbound object.
+ */
+function buildProxyOutbound(server, tag = 'proxy') {
+  let tlsConfig = server.tls ? JSON.parse(JSON.stringify(server.tls)) : undefined;
+  if (tlsConfig && server.transport && server.transport.type === 'ws' && !tlsConfig.reality && (!tlsConfig.alpn || tlsConfig.alpn.length === 0)) {
+    tlsConfig.alpn = ['http/1.1'];
+  }
+
+  return {
+    type: server.type || 'vless',
+    tag,
+    server: server.server,
+    server_port: server.server_port,
+    uuid: server.uuid,
+    flow: server.flow || undefined,
+    packet_encoding: 'xudp',
+    tls: tlsConfig,
+    transport: server.transport
+  };
+}
+
+/**
  * Generates sing-box 1.14.4 compatible configuration.
  */
 async function generateSingboxConfig(server, options = {}) {
@@ -29,7 +51,8 @@ async function generateSingboxConfig(server, options = {}) {
     mode = 'tun', // 'tun' or 'system_proxy'
     mtu = 1400,   // Crucial: 1400 avoids fragmentation disconnections
     mixedPort = 20807,
-    routingMode = 'rule' // 'rule' (bypass LAN/private), 'global'
+    routingMode = 'rule', // 'rule' (bypass LAN/private), 'global'
+    clashApiPort = 0
   } = options;
 
   const serverIp = await resolveHostToIp(server.server);
@@ -56,23 +79,8 @@ async function generateSingboxConfig(server, options = {}) {
     });
   }
 
-  let tlsConfig = server.tls ? JSON.parse(JSON.stringify(server.tls)) : undefined;
-  if (tlsConfig && server.transport && server.transport.type === 'ws' && !tlsConfig.reality && (!tlsConfig.alpn || tlsConfig.alpn.length === 0)) {
-    tlsConfig.alpn = ['http/1.1'];
-  }
-
   // Construct Outbound based on server type
-  const proxyOutbound = {
-    type: server.type || 'vless',
-    tag: 'proxy',
-    server: server.server,
-    server_port: server.server_port,
-    uuid: server.uuid,
-    flow: server.flow || undefined,
-    packet_encoding: 'xudp',
-    tls: tlsConfig,
-    transport: server.transport
-  };
+  const proxyOutbound = buildProxyOutbound(server, 'proxy');
 
   const outbounds = [
     proxyOutbound,
@@ -141,7 +149,7 @@ async function generateSingboxConfig(server, options = {}) {
     final: 'proxy'
   };
 
-  return {
+  const config = {
     log: {
       level: 'info',
       timestamp: true
@@ -151,9 +159,20 @@ async function generateSingboxConfig(server, options = {}) {
     outbounds: outbounds,
     route: routeConfig
   };
+
+  if (Number.isInteger(clashApiPort) && clashApiPort > 0) {
+    config.experimental = {
+      clash_api: {
+        external_controller: `127.0.0.1:${clashApiPort}`
+      }
+    };
+  }
+
+  return config;
 }
 
 module.exports = {
   generateSingboxConfig,
+  buildProxyOutbound,
   resolveHostToIp
 };

@@ -4,7 +4,7 @@ const path = require('path');
 const https = require('https');
 const SingboxManager = require('./core/singbox');
 const { parseShareLink, parseSubscriptionContent, parseSubscriptionUserInfo } = require('./core/parser');
-const { testAllServers, testTcpLatency } = require('./core/ping');
+const { testAllServers } = require('./core/ping');
 const {
   getServers,
   saveServers,
@@ -18,9 +18,62 @@ const {
 const PORT = 4040;
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
 
-const singbox = new SingboxManager();
-
 let subscriptionInfo = getSubscription();
+let lastWorkingServerId = null;
+let connectInFlight = false;
+
+function orderAutoCandidates(servers) {
+  const list = Array.isArray(servers) ? [...servers] : [];
+  const picked = new Set();
+  const ordered = [];
+
+  if (lastWorkingServerId) {
+    const last = list.find(s => s.id === lastWorkingServerId);
+    if (last) {
+      ordered.push(last);
+      picked.add(last.id);
+    }
+  }
+
+  const reachable = list
+    .filter(s => !picked.has(s.id) && s.ping && s.ping > 0)
+    .sort((a, b) => a.ping - b.ping);
+  reachable.forEach(s => {
+    ordered.push(s);
+    picked.add(s.id);
+  });
+
+  const rest = list
+    .filter(s => !picked.has(s.id))
+    .sort((a, b) => {
+      const aWs = a.network === 'ws' ? 0 : 1;
+      const bWs = b.network === 'ws' ? 0 : 1;
+      return aWs - bWs;
+    });
+
+  return [...ordered, ...rest];
+}
+
+async function handleWatchdogFailover(failedServer, options) {
+  const servers = getServers();
+  const candidates = orderAutoCandidates(servers).filter(s => !failedServer || s.id !== failedServer.id);
+  for (const cand of candidates) {
+    const result = await singbox.start(cand, { ...options, verifyTunnel: true });
+    if (result.success) {
+      lastWorkingServerId = cand.id;
+      if (result.latencyMs > 0) {
+        cand.ping = result.latencyMs;
+        saveServers(servers);
+      }
+      return true;
+    }
+    cand.ping = -1;
+  }
+  saveServers(servers);
+  return false;
+}
+
+const singbox = new SingboxManager({ onFailover: handleWatchdogFailover });
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
@@ -252,6 +305,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/connect' && req.method === 'POST') {
+    if (connectInFlight) {
+      return replyJson({ success: false, error: 'Ulanish jarayoni davom etmoqda...' }, 409);
+    }
+
     const body = await parseBody(req);
     const servers = getServers();
     const settings = getSettings();
@@ -264,46 +321,71 @@ const server = http.createServer(async (req, res) => {
     settings.selectedServerId = targetId;
     saveSettings(settings);
 
-    const isAuto = targetId === 'auto' || !targetId;
-    let candidates = [];
-    if (isAuto) {
-      const reachable = servers.filter(s => s.ping && s.ping > 0).sort((a, b) => a.ping - b.ping);
-      const rest = servers.filter(s => !s.ping || s.ping <= 0);
-      candidates = [...reachable, ...rest];
-    } else {
-      const single = servers.find(s => s.id === targetId) || servers[0];
-      candidates = [single];
-    }
-
     const runOpts = {
       mode: settings.mode,
       mtu: settings.mtu,
       routingMode: settings.routingMode,
-      autoReconnect: settings.autoReconnect
+      autoReconnect: settings.autoReconnect,
+      verifyTunnel: true
     };
 
-    if (!isAuto) {
-      const result = await singbox.start(candidates[0], runOpts);
-      return replyJson({ ...result, activeServer: candidates[0] }, result.success ? 200 : 500);
-    }
+    connectInFlight = true;
+    try {
+      const isAuto = targetId === 'auto' || !targetId;
 
-    let lastErr = 'Ishlaydigan server topilmadi';
-    for (let i = 0; i < candidates.length; i++) {
-      const cand = candidates[i];
-      const result = await singbox.start(cand, runOpts);
-      if (result.success) {
-        await new Promise(r => setTimeout(r, 300));
-        const healthy = await singbox.checkTunnelHealth();
-        if (healthy) {
-          return replyJson({ success: true, activeServer: cand });
+      if (!isAuto) {
+        const single = servers.find(s => s.id === targetId) || servers[0];
+        const result = await singbox.start(single, runOpts);
+        if (result.success) {
+          if (result.latencyMs > 0) {
+            single.ping = result.latencyMs;
+            saveServers(servers);
+          }
+          lastWorkingServerId = single.id;
+          return replyJson({
+            success: true,
+            activeServer: single,
+            latencyMs: result.latencyMs
+          }, 200);
         }
-        lastErr = `${cand.name}: tunnel tekshiruvi o'tmadi`;
-        await singbox.stop();
-      } else {
+
+        single.ping = -1;
+        saveServers(servers);
+        return replyJson({
+          success: false,
+          error: result.error,
+          failedServerId: single.id,
+          canAutoFallback: servers.length > 1
+        }, 502);
+      }
+
+      const candidates = orderAutoCandidates(servers);
+      let lastErr = 'Ishlaydigan server topilmadi';
+      for (let i = 0; i < candidates.length; i++) {
+        const cand = candidates[i];
+        const result = await singbox.start(cand, runOpts);
+        if (result.success) {
+          if (result.latencyMs > 0) {
+            cand.ping = result.latencyMs;
+          }
+          saveServers(servers);
+          lastWorkingServerId = cand.id;
+          return replyJson({
+            success: true,
+            activeServer: cand,
+            latencyMs: result.latencyMs
+          }, 200);
+        }
+        cand.ping = -1;
         lastErr = result.error || lastErr;
       }
+
+      saveServers(servers);
+      await singbox.stop();
+      return replyJson({ success: false, error: lastErr }, 502);
+    } finally {
+      connectInFlight = false;
     }
-    return replyJson({ success: false, error: lastErr }, 500);
   }
 
   if (url.pathname === '/api/disconnect' && req.method === 'POST') {
@@ -349,7 +431,8 @@ const server = http.createServer(async (req, res) => {
     if (single) {
       single.country = detectFlag(single.name);
       single.source = 'manual';
-      single.ping = await testTcpLatency(single.server, single.server_port);
+      const [pingRes] = await testAllServers([single]);
+      single.ping = pingRes ? pingRes.ping : -1;
 
       const servers = getServers();
       servers.unshift(single);
@@ -498,3 +581,20 @@ server.on('error', (err) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[ZedVPN] Server running at http://127.0.0.1:${PORT}`);
 });
+
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[ZedRay] Received ${signal}, cleaning up tunnel & system proxy...`);
+  try {
+    await singbox.stop();
+  } catch (err) {
+    console.warn('[ZedRay] Shutdown stop error:', err.message);
+  }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 1000).unref();
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

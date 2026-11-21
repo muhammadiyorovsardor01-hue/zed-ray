@@ -9,11 +9,14 @@ let appState = {
   status: 'disconnected',
   activeServer: null,
   duration: 0,
+  dlBps: 0,
+  ulBps: 0,
   filter: 'all',
   searchQuery: '',
   timerInterval: null,
   speedHistory: Array(30).fill(0),
-  speedInterval: null
+  speedInterval: null,
+  statusPollTimer: null
 };
 
 // Server names come from third-party subscriptions: never inject them as raw HTML.
@@ -146,6 +149,8 @@ async function loadStatus() {
     appState.status = data.status;
     appState.activeServer = data.activeServer;
     appState.duration = data.duration || 0;
+    appState.dlBps = data.status === 'connected' ? (Number(data.dlBps) || 0) : 0;
+    appState.ulBps = data.status === 'connected' ? (Number(data.ulBps) || 0) : 0;
 
     if (data.settings) {
       settingTunMode.checked = data.settings.mode === 'tun';
@@ -153,6 +158,9 @@ async function loadStatus() {
       settingWatchdog.checked = data.settings.autoReconnect !== false;
     }
 
+    if (appState.status === 'connected' && !appState.speedInterval) {
+      startSpeedSimulation();
+    }
     updateConnectionUI();
   } catch (err) {
     console.error('Error fetching status:', err);
@@ -375,18 +383,32 @@ function formatTimer(sec) {
 }
 
 // ================= LIVE SPEED MONITOR & CANVAS GRAPH =================
+function formatSpeedHtml(bps) {
+  const val = Number(bps) || 0;
+  if (val >= 1048576) return `${(val / 1048576).toFixed(2)} <small>MB/s</small>`;
+  if (val >= 1024) return `${(val / 1024).toFixed(1)} <small>KB/s</small>`;
+  return `0.0 <small>KB/s</small>`;
+}
+
+function updateSpeedDisplay() {
+  if (appState.status !== 'connected') {
+    speedDown.innerHTML = `0.0 <small>KB/s</small>`;
+    speedUp.innerHTML = `0.0 <small>KB/s</small>`;
+    return;
+  }
+  speedDown.innerHTML = formatSpeedHtml(appState.dlBps);
+  speedUp.innerHTML = formatSpeedHtml(appState.ulBps);
+  appState.speedHistory.shift();
+  appState.speedHistory.push((Number(appState.dlBps) || 0) / 1048576);
+  drawSpeedCanvas();
+}
+
 function startSpeedSimulation() {
   stopSpeedSimulation();
+  updateSpeedDisplay();
   appState.speedInterval = setInterval(() => {
     if (appState.status !== 'connected') return;
-    const down = (Math.random() * 15 + 8).toFixed(1);
-    const up = (Math.random() * 4 + 1.2).toFixed(1);
-    speedDown.innerHTML = `${down} <small>MB/s</small>`;
-    speedUp.innerHTML = `${up} <small>MB/s</small>`;
-
-    appState.speedHistory.shift();
-    appState.speedHistory.push(parseFloat(down));
-    drawSpeedCanvas();
+    updateSpeedDisplay();
   }, 1000);
 }
 
@@ -395,8 +417,10 @@ function stopSpeedSimulation() {
     clearInterval(appState.speedInterval);
     appState.speedInterval = null;
   }
-  speedDown.innerHTML = `0.0 <small>MB/s</small>`;
-  speedUp.innerHTML = `0.0 <small>MB/s</small>`;
+  appState.dlBps = 0;
+  appState.ulBps = 0;
+  speedDown.innerHTML = `0.0 <small>KB/s</small>`;
+  speedUp.innerHTML = `0.0 <small>KB/s</small>`;
   appState.speedHistory = Array(30).fill(0);
   drawSpeedCanvas();
 }
@@ -408,7 +432,7 @@ function drawSpeedCanvas() {
   ctx.clearRect(0, 0, w, h);
 
   ctx.beginPath();
-  const max = Math.max(...appState.speedHistory, 25);
+  const max = Math.max(...appState.speedHistory, 0.5);
   const step = w / (appState.speedHistory.length - 1);
 
   appState.speedHistory.forEach((val, i) => {
@@ -567,8 +591,15 @@ async function updateSettings(partial) {
 }
 
 // ================= INIT =================
+function scheduleStatusPoll() {
+  const delay = (appState.status === 'connected' || appState.status === 'connecting') ? 1500 : 2500;
+  appState.statusPollTimer = setTimeout(async () => {
+    await loadStatus();
+    scheduleStatusPoll();
+  }, delay);
+}
+
 loadServers();
 loadStatus();
 drawSpeedCanvas();
-
-setInterval(loadStatus, 2000);
+scheduleStatusPoll();
