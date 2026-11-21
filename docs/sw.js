@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zedray-app-v2';
+const CACHE_NAME = 'zedray-app-v3';
 const ASSETS = [
   './',
   './index.html',

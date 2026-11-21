@@ -5,14 +5,22 @@ const https = require('https');
 const SingboxManager = require('./core/singbox');
 const { parseShareLink, parseSubscriptionContent, parseSubscriptionUserInfo } = require('./core/parser');
 const { testAllServers, testTcpLatency } = require('./core/ping');
-const { getServers, saveServers, getSettings, saveSettings, INITIAL_SUBSCRIPTION } = require('./storage/store');
+const {
+  getServers,
+  saveServers,
+  getSettings,
+  saveSettings,
+  getSubscription,
+  saveSubscription,
+  EMPTY_SUBSCRIPTION
+} = require('./storage/store');
 
 const PORT = 4040;
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
 
 const singbox = new SingboxManager();
 
-let subscriptionInfo = { ...INITIAL_SUBSCRIPTION };
+let subscriptionInfo = getSubscription();
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
@@ -78,6 +86,19 @@ function detectFlag(name) {
   return '🌐';
 }
 
+function decodeProfileTitle(rawTitle) {
+  if (!rawTitle) return '';
+  const trimmed = String(rawTitle).trim();
+  if (/^base64:/i.test(trimmed)) {
+    try {
+      return Buffer.from(trimmed.slice(7).trim(), 'base64').toString('utf-8').trim();
+    } catch {
+      return '';
+    }
+  }
+  return trimmed;
+}
+
 // Fetch a subscription URL: follows redirects, enforces a timeout and a size cap.
 function fetchSubscription(targetUrl, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
@@ -92,7 +113,7 @@ function fetchSubscription(targetUrl, redirectsLeft = 5) {
     }
 
     const client = parsed.protocol === 'https:' ? https : http;
-    const req = client.get(parsed, { headers: { 'User-Agent': 'v2rayN/sing-box/Hiddify' }, timeout: 15000 }, (resp) => {
+    const req = client.get(parsed, { headers: { 'User-Agent': 'sing-box/1.14.4' }, timeout: 15000 }, (resp) => {
       if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
         resp.resume();
         if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
@@ -114,12 +135,61 @@ function fetchSubscription(targetUrl, redirectsLeft = 5) {
         }
         data += chunk;
       });
-      resp.on('end', () => resolve({ data, userInfo: resp.headers['subscription-userinfo'] }));
+      resp.on('end', () => resolve({
+        data,
+        userInfo: resp.headers['subscription-userinfo'],
+        profileTitle: resp.headers['profile-title']
+      }));
       resp.on('error', reject);
     });
     req.on('timeout', () => req.destroy(new Error('Request timed out')));
     req.on('error', reject);
   });
+}
+
+async function importSubscription(subUrl, requestedName = '') {
+  const result = await fetchSubscription(subUrl);
+  const parsedServers = parseSubscriptionContent(result.data);
+
+  if (parsedServers.length === 0) {
+    return { success: false, status: 400, error: 'Obunadan birorta ham VLESS server topilmadi' };
+  }
+
+  parsedServers.forEach(s => {
+    s.country = detectFlag(s.name);
+    s.source = 'subscription';
+  });
+
+  const pingResults = await testAllServers(parsedServers);
+  parsedServers.forEach(srv => {
+    const p = pingResults.find(r => r.id === srv.id);
+    if (p) srv.ping = p.ping;
+  });
+
+  const existing = getServers().filter(s => s.source === 'manual');
+  const merged = [...parsedServers, ...existing];
+  saveServers(merged);
+
+  const decodedTitle = decodeProfileTitle(result.profileTitle);
+  const parsedStats = parseSubscriptionUserInfo(result.userInfo);
+  subscriptionInfo = {
+    name: requestedName || decodedTitle || 'MultiCo VPN',
+    serverCount: parsedServers.length,
+    updatedText: 'updated just now',
+    usedGb: parsedStats ? parseFloat(parsedStats.usedGb) || 0 : 0,
+    totalGb: parsedStats ? parseFloat(parsedStats.totalGb) || 0 : 0,
+    daysLeft: parsedStats ? parseInt(parsedStats.daysLeft, 10) || 0 : 0,
+    url: subUrl
+  };
+  saveSubscription(subscriptionInfo);
+
+  const settings = getSettings();
+  if (!settings.selectedServerId || !merged.some(s => s.id === settings.selectedServerId)) {
+    settings.selectedServerId = merged.length > 1 ? 'auto' : merged[0].id;
+    saveSettings(settings);
+  }
+
+  return { success: true, servers: merged, subscription: subscriptionInfo, selectedServerId: settings.selectedServerId };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -186,33 +256,54 @@ const server = http.createServer(async (req, res) => {
     const servers = getServers();
     const settings = getSettings();
 
-    let targetServer = null;
-    const targetId = body.serverId || settings.selectedServerId;
-
-    if (targetId === 'auto' || !targetId) {
-      // Find fastest server with ping > 0
-      const validServers = servers.filter(s => s.ping && s.ping > 0).sort((a, b) => a.ping - b.ping);
-      targetServer = validServers[0] || servers[0];
-    } else {
-      targetServer = servers.find(s => s.id === targetId) || servers[0];
+    const targetId = body.serverId || settings.selectedServerId || 'auto';
+    if (!servers.length) {
+      return replyJson({ success: false, error: 'Serverlar topilmadi' }, 400);
     }
 
-    if (!targetServer) {
-      return replyJson({ success: false, error: 'No servers configured' }, 400);
-    }
-
-    // Save selection
     settings.selectedServerId = targetId;
     saveSettings(settings);
 
-    const result = await singbox.start(targetServer, {
+    const isAuto = targetId === 'auto' || !targetId;
+    let candidates = [];
+    if (isAuto) {
+      const reachable = servers.filter(s => s.ping && s.ping > 0).sort((a, b) => a.ping - b.ping);
+      const rest = servers.filter(s => !s.ping || s.ping <= 0);
+      candidates = [...reachable, ...rest];
+    } else {
+      const single = servers.find(s => s.id === targetId) || servers[0];
+      candidates = [single];
+    }
+
+    const runOpts = {
       mode: settings.mode,
       mtu: settings.mtu,
       routingMode: settings.routingMode,
       autoReconnect: settings.autoReconnect
-    });
+    };
 
-    return replyJson({ ...result, activeServer: targetServer });
+    if (!isAuto) {
+      const result = await singbox.start(candidates[0], runOpts);
+      return replyJson({ ...result, activeServer: candidates[0] }, result.success ? 200 : 500);
+    }
+
+    let lastErr = 'Ishlaydigan server topilmadi';
+    for (let i = 0; i < candidates.length; i++) {
+      const cand = candidates[i];
+      const result = await singbox.start(cand, runOpts);
+      if (result.success) {
+        await new Promise(r => setTimeout(r, 300));
+        const healthy = await singbox.checkTunnelHealth();
+        if (healthy) {
+          return replyJson({ success: true, activeServer: cand });
+        }
+        lastErr = `${cand.name}: tunnel tekshiruvi o'tmadi`;
+        await singbox.stop();
+      } else {
+        lastErr = result.error || lastErr;
+      }
+    }
+    return replyJson({ success: false, error: lastErr }, 500);
   }
 
   if (url.pathname === '/api/disconnect' && req.method === 'POST') {
@@ -236,75 +327,102 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/servers/add' && req.method === 'POST') {
     const body = await parseBody(req);
-    if (!body.link) {
-      return replyJson({ success: false, error: 'Link is required' }, 400);
+    const input = String(body.link || '').trim();
+    if (!input) {
+      return replyJson({ success: false, error: 'Havola kiritilmadi' }, 400);
     }
 
-    const srv = parseShareLink(body.link);
-    if (!srv) {
-      return replyJson({ success: false, error: 'Invalid VLESS/Reality link format' }, 400);
+    // Allow pasting a subscription URL directly here as well
+    if (/^https?:\/\//i.test(input)) {
+      try {
+        const resObj = await importSubscription(input, body.name || '');
+        if (!resObj.success) {
+          return replyJson({ success: false, error: resObj.error }, resObj.status || 400);
+        }
+        return replyJson(resObj);
+      } catch (err) {
+        return replyJson({ success: false, error: `Obunani yuklab bo'lmadi: ${err.message}` }, 500);
+      }
     }
 
-    srv.country = detectFlag(srv.name);
-    srv.source = 'manual';
-    srv.ping = await testTcpLatency(srv.server, srv.server_port);
+    const single = parseShareLink(input);
+    if (single) {
+      single.country = detectFlag(single.name);
+      single.source = 'manual';
+      single.ping = await testTcpLatency(single.server, single.server_port);
 
-    const servers = getServers();
-    servers.unshift(srv);
-    saveServers(servers);
+      const servers = getServers();
+      servers.unshift(single);
+      saveServers(servers);
 
-    return replyJson({ success: true, server: srv });
+      return replyJson({ success: true, server: single, servers });
+    }
+
+    // Fallback: multi-line VLESS list or Base64 subscription payload
+    const multi = parseSubscriptionContent(input);
+    if (multi.length > 0) {
+      multi.forEach(s => {
+        s.country = detectFlag(s.name);
+        s.source = 'manual';
+      });
+      const pingResults = await testAllServers(multi);
+      multi.forEach(srv => {
+        const p = pingResults.find(r => r.id === srv.id);
+        if (p) srv.ping = p.ping;
+      });
+      const existing = getServers();
+      const merged = [...multi, ...existing];
+      saveServers(merged);
+      return replyJson({ success: true, server: multi[0], servers: merged, addedCount: multi.length });
+    }
+
+    return replyJson({ success: false, error: 'Noto‘g‘ri VLESS yoki obuna havolasi' }, 400);
   }
 
   if (url.pathname === '/api/subscription/update' && req.method === 'POST') {
     const body = await parseBody(req);
-    const subUrl = body.url || subscriptionInfo.url;
+    const subUrl = String(body.url || subscriptionInfo.url || '').trim();
 
     if (!subUrl) {
-      return replyJson({ success: false, error: 'Subscription URL is required' }, 400);
+      return replyJson({ success: false, error: 'Obuna URL havolasi kerak' }, 400);
     }
 
     try {
-      const result = await fetchSubscription(subUrl);
-      const parsedServers = parseSubscriptionContent(result.data);
-
-      if (parsedServers.length === 0) {
-        return replyJson({ success: false, error: 'No valid VLESS servers found in subscription' }, 400);
+      const resObj = await importSubscription(subUrl, body.name || '');
+      if (!resObj.success) {
+        return replyJson({ success: false, error: resObj.error }, resObj.status || 400);
       }
-
-      parsedServers.forEach(s => {
-        s.country = detectFlag(s.name);
-        s.source = 'subscription';
-      });
-
-      // Ping them
-      const pingResults = await testAllServers(parsedServers);
-      parsedServers.forEach(srv => {
-        const p = pingResults.find(r => r.id === srv.id);
-        if (p) srv.ping = p.ping;
-      });
-
-      // Retain manual servers and append subscription servers
-      const existing = getServers().filter(s => s.source === 'manual');
-      const merged = [...parsedServers, ...existing];
-      saveServers(merged);
-
-      // Update subscription info
-      const parsedStats = parseSubscriptionUserInfo(result.userInfo);
-      subscriptionInfo = {
-        name: body.name || 'MultiCo VPN',
-        serverCount: parsedServers.length,
-        updatedText: 'updated just now',
-        usedGb: parsedStats ? parsedStats.usedGb : 65.86,
-        totalGb: parsedStats ? parsedStats.totalGb : 10240.00,
-        daysLeft: parsedStats ? parsedStats.daysLeft : 348,
-        url: subUrl
-      };
-
-      return replyJson({ success: true, servers: merged, subscription: subscriptionInfo });
+      return replyJson(resObj);
     } catch (err) {
       return replyJson({ success: false, error: `Failed to fetch subscription: ${err.message}` }, 500);
     }
+  }
+
+  if ((url.pathname === '/api/subscription/delete' && req.method === 'POST') ||
+      (url.pathname === '/api/subscription' && req.method === 'DELETE')) {
+    const statusData = singbox.getStatus();
+    if (statusData.status !== 'disconnected' && (!statusData.activeServer || statusData.activeServer.source === 'subscription')) {
+      await singbox.stop();
+    }
+
+    const remaining = getServers().filter(s => s.source !== 'subscription');
+    saveServers(remaining);
+
+    subscriptionInfo = { ...EMPTY_SUBSCRIPTION };
+    saveSubscription(subscriptionInfo);
+
+    const settings = getSettings();
+    if (settings.selectedServerId !== 'auto' && !remaining.some(s => s.id === settings.selectedServerId)) {
+      settings.selectedServerId = remaining.length > 1 ? 'auto' : (remaining[0] ? remaining[0].id : 'auto');
+      saveSettings(settings);
+    }
+
+    return replyJson({
+      success: true,
+      servers: remaining,
+      subscription: subscriptionInfo,
+      selectedServerId: settings.selectedServerId
+    });
   }
 
   if (url.pathname === '/api/settings' && req.method === 'POST') {
@@ -367,6 +485,14 @@ const server = http.createServer(async (req, res) => {
       res.end(content);
     }
   });
+});
+
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.log(`[ZedRay] Bridge already running on 127.0.0.1:${PORT}`);
+    process.exit(0);
+  }
+  throw err;
 });
 
 server.listen(PORT, '127.0.0.1', () => {
