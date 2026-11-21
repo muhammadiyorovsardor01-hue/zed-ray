@@ -987,9 +987,13 @@
                 <button class="pill-btn pill-dark" id="btnClearCfg" type="button">✕ Tozalash</button>
               </div>
             </div>
-            <textarea class="vless-area" id="cfgVlessInput" placeholder="vless://uuid@host:443?security=tls&amp;type=ws&amp;path=%2Fcdn-ws&amp;host=cdn.example.com&amp;sni=cdn.example.com&amp;alpn=http%2F1.1#Server"></textarea>
+            <textarea class="vless-area" id="cfgVlessInput" placeholder="vless://uuid@host:443?... yoki https://... obuna havolasi"></textarea>
             <div class="badges-row" id="cfgParsedBadges"></div>
             <div class="err-banner" id="cfgErrBanner"></div>
+            <div id="cfgSubHint" style="display:none;margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(168,85,247,0.14);border:1px solid rgba(168,85,247,0.45);align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <span style="font-size:12px;color:#E9D5FF;">Obuna havolasi aniqlandi. Serverlarni yuklab konfiguratsiyani ochamizmi?</span>
+              <button class="pill-btn pill-purple" id="btnCfgImportSub" type="button">🔄 Obunadan yuklash</button>
+            </div>
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:8px;">
               <span style="font-size:11px;color:var(--muted);">100% brauzer ichida ishlaydi · Faol rejim va MTU ishlatiladi</span>
               <div style="display:flex;gap:6px;">
@@ -1061,19 +1065,12 @@
         <button class="pill-btn pill-red" id="btnCloseAddModal" type="button">✕ Yopish</button>
       </div>
 
-      <label class="modal-lbl" for="txtVlessLink" style="color:var(--cyan);">1. VLESS Havolasi (vless://...):</label>
-      <textarea class="modal-input" id="txtVlessLink" rows="3" placeholder="vless://..."></textarea>
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <label class="modal-lbl" for="txtVlessLink" style="color:var(--cyan);">Obuna havolasi (https://...) yoki VLESS link (vless://...):</label>
+      <textarea class="modal-input" id="txtVlessLink" rows="4" placeholder="https://... yoki vless://... (bir nechta qator yoki Base64 ham mumkin)"></textarea>
+      <input class="modal-input" id="txtSubName" type="text" placeholder="Obuna nomi (ixtiyoriy, masalan: MultiCo VPN)">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="pill-btn pill-dark" id="btnPasteVless" type="button">📋 Paste</button>
-        <button class="pill-btn pill-cyan" id="btnSaveVless" type="button">✓ Serverni Saqlash</button>
-      </div>
-
-      <label class="modal-lbl" for="txtSubUrl" style="color:var(--purple);">2. Yoki Obuna Havolasi (Subscription URL):</label>
-      <input class="modal-input" id="txtSubUrl" type="text" placeholder="https://...">
-      <input class="modal-input" id="txtSubName" type="text" placeholder="Obuna nomi (ixtiyoriy)">
-      <div style="display:flex;gap:8px;">
-        <button class="pill-btn pill-dark" id="btnPasteSub" type="button">📋 Paste URL</button>
-        <button class="pill-btn pill-purple" id="btnSaveSub" type="button">🔄 Obunani Yuklash</button>
+        <button class="pill-btn pill-cyan" id="btnSaveVless" type="button" style="flex:1;">✓ Qo‘shish / Yuklash</button>
       </div>
     </div>
   </div>
@@ -1629,26 +1626,53 @@
       renderAll();
     }
 
+    function parseBulkServers(rawText) {
+      let decoded = String(rawText || '').trim();
+      if (!decoded) return [];
+      if (!decoded.includes('://')) {
+        try {
+          decoded = decodeURIComponent(escape(atob(decoded)));
+        } catch {
+          try { decoded = atob(decoded); } catch {}
+        }
+      }
+      const list = [];
+      for (const line of decoded.split(/\r?\n/)) {
+        const item = parseVlessUrl(line.trim());
+        if (item) list.push(item);
+      }
+      return list;
+    }
+
     async function deleteSubscription() {
       const subCount = state.servers.filter(s => s.source === 'subscription').length;
       if (!confirm(`«${state.subscription.name || 'Obuna'}» va undagi ${subCount} ta server o‘chirilsinmi?`)) return;
 
+      if (state.bridgeOnline) {
+        try {
+          const res = await bridgeFetch('/api/subscription/delete', { method: 'POST' }, 5000);
+          if (res.success) {
+            state.status = 'disconnected';
+            state.activeServer = null;
+            state.servers = Array.isArray(res.servers) ? res.servers.map(normalizeBridgeServer) : [];
+            state.subscription = { name: '', url: '', usedGb: 0, totalGb: 0, daysLeft: 0 };
+            state.settings.selectedServerId = res.selectedServerId || 'auto';
+            renderAll();
+            showToast('Obuna o‘chirildi.');
+            return;
+          }
+        } catch {}
+      }
+
       if (state.status !== 'disconnected' && (!state.activeServer || state.activeServer.source === 'subscription')) {
         await disconnectVpn();
       }
-
-      const toDelete = state.servers.filter(s => s.source === 'subscription').map(s => s.id);
       state.servers = state.servers.filter(s => s.source !== 'subscription');
       state.subscription = { name: '', url: '', usedGb: 0, totalGb: 0, daysLeft: 0 };
       if (state.settings.selectedServerId !== 'auto' && !state.servers.some(s => s.id === state.settings.selectedServerId)) {
         state.settings.selectedServerId = state.servers[0] ? state.servers[0].id : 'auto';
       }
       saveLocalState();
-      if (state.bridgeOnline) {
-        for (const id of toDelete) {
-          try { await bridgeFetch(`/api/servers/${encodeURIComponent(id)}`, { method: 'DELETE' }, 2000); } catch {}
-        }
-      }
       renderAll();
       showToast('Obuna o‘chirildi.');
     }
@@ -1660,61 +1684,63 @@
         const subUrl = (urlOverride || state.subscription.url || '').trim();
         if (!subUrl) {
           await pingAllServers();
-          return;
+          return false;
         }
-        const subName = nameOverride || state.subscription.name || 'MultiCo VPN';
+        const subName = nameOverride || state.subscription.name || '';
+
+        if (!state.bridgeOnline) {
+          await probeBridge(true);
+        }
 
         if (state.bridgeOnline) {
           const res = await bridgeFetch('/api/subscription/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: subUrl, name: subName })
-          }, 20000);
+          }, 25000);
           if (res.success && Array.isArray(res.servers)) {
             state.servers = res.servers.map(normalizeBridgeServer);
             if (res.subscription) {
               state.subscription = {
-                name: res.subscription.name || subName,
+                name: res.subscription.name || subName || 'MultiCo VPN',
                 url: res.subscription.url || subUrl,
                 usedGb: parseFloat(res.subscription.usedGb) || 0,
                 totalGb: parseFloat(res.subscription.totalGb) || 0,
                 daysLeft: parseInt(res.subscription.daysLeft, 10) || 0
               };
             }
+            if (res.selectedServerId) state.settings.selectedServerId = res.selectedServerId;
             renderAll();
             showToast(`${state.servers.length} ta server yangilandi!`);
-          } else {
-            showToast(res.error || 'Obunani yuklab bo‘lmadi');
+            return true;
           }
-          return;
+          showToast(res.error || 'Obunani yuklab bo‘lmadi');
+          return false;
         }
 
-        // Direct browser fetch fallback (works when server allows CORS)
+        // Direct browser fetch fallback (only works if remote subscription sends CORS headers)
         const resp = await fetch(subUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        let raw = (await resp.text()).trim();
-        if (!raw.includes('://')) {
-          try { raw = decodeURIComponent(escape(atob(raw))); } catch { raw = atob(raw); }
-        }
-        const parsed = [];
-        for (const line of raw.split(/\r?\n/)) {
-          const item = parseVlessUrl(line);
-          if (item) {
-            item.source = 'subscription';
-            parsed.push(item);
-          }
-        }
+        const rawText = await resp.text();
+        const parsed = parseBulkServers(rawText);
         if (!parsed.length) throw new Error('Obunadan VLESS server topilmadi');
+        parsed.forEach(s => { s.source = 'subscription'; });
+
         const manual = state.servers.filter(s => s.source !== 'subscription');
         state.servers = [...parsed, ...manual];
-        state.subscription = { name: subName, url: subUrl, usedGb: 0, totalGb: 0, daysLeft: 0 };
-        if (state.servers.length > 1) state.settings.selectedServerId = 'auto';
-        else state.settings.selectedServerId = state.servers[0].id;
+        state.subscription = { name: subName || 'MultiCo VPN', url: subUrl, usedGb: 0, totalGb: 0, daysLeft: 0 };
+        state.settings.selectedServerId = state.servers.length > 1 ? 'auto' : state.servers[0].id;
         saveLocalState();
         renderAll();
         showToast(`${parsed.length} ta server yuklandi!`);
+        return true;
       } catch (err) {
-        showToast('Obunani brauzerdan yuklab bo‘lmadi (CORS yoki tarmoq). VLESS link qo‘shing yoki ZedRay.bat yoqing.');
+        if (!state.bridgeOnline) {
+          showToast('Brauzer CORS cheklovi tufayli obunani yuklash uchun lokal ZedRay Bridge (127.0.0.1:4040) yoqilgan bo‘lishi kerak. Windows’da ZedRayBridge.vbs ni ishga tushiring.');
+        } else {
+          showToast('Obunani yuklab bo‘lmadi: ' + (err && err.message ? err.message : 'Xato'));
+        }
+        return false;
       } finally {
         btn.classList.remove('spinning');
       }
@@ -1953,20 +1979,31 @@
       const input = document.getElementById('cfgVlessInput').value.trim();
       const badges = document.getElementById('cfgParsedBadges');
       const errBanner = document.getElementById('cfgErrBanner');
+      const subHint = document.getElementById('cfgSubHint');
       const out = document.getElementById('cfgJsonOut');
 
       badges.innerHTML = '';
       if (!input) {
         errBanner.style.display = 'none';
+        subHint.style.display = 'none';
         out.textContent = '// VLESS havolani kiriting yoki "Namuna" tugmasini bosing';
         return;
       }
 
-      const srv = parseVlessUrl(input);
+      if (/^https?:\/\//i.test(input)) {
+        errBanner.style.display = 'none';
+        subHint.style.display = 'flex';
+        out.textContent = '// Obuna havolasi aniqlandi. "Obunadan yuklash" tugmasini bosing.';
+        return;
+      }
+      subHint.style.display = 'none';
+
+      const bulk = parseBulkServers(input);
+      const srv = parseVlessUrl(input) || bulk[0] || null;
       if (!srv) {
-        errBanner.textContent = 'Havola noto‘g‘ri formatda (vless://uuid@host:port?... bo‘lishi kerak).';
+        errBanner.textContent = 'Havola noto‘g‘ri formatda (vless://... yoki https://... obuna havolasi bo‘lishi kerak).';
         errBanner.style.display = 'block';
-        out.textContent = '// Xato: to‘g‘ri VLESS havola kiriting';
+        out.textContent = '// Xato: to‘g‘ri VLESS yoki obuna havola kiriting';
         return;
       }
 
@@ -2108,11 +2145,24 @@
       URL.revokeObjectURL(url);
     });
 
-    // Add Server / Subscription Modal
+    document.getElementById('btnCfgImportSub').addEventListener('click', async () => {
+      const u = document.getElementById('cfgVlessInput').value.trim();
+      if (!/^https?:\/\//i.test(u)) return;
+      const ok = await syncSubscription(u);
+      if (ok) {
+        const srv = getTargetServer();
+        if (srv) {
+          document.getElementById('cfgVlessInput').value = serverToVlessUrl(srv);
+          updateConfigurator();
+        }
+      }
+    });
+
+    // Add Server / Subscription Modal (unified smart input)
     const addModal = document.getElementById('addModal');
     document.getElementById('btnOpenAdd').addEventListener('click', () => {
-      document.getElementById('txtSubUrl').value = state.subscription.url || '';
-      document.getElementById('txtSubName').value = state.subscription.name || 'MultiCo VPN';
+      document.getElementById('txtVlessLink').value = state.subscription.url || '';
+      document.getElementById('txtSubName').value = state.subscription.name || '';
       addModal.classList.add('open');
     });
     document.getElementById('btnCloseAddModal').addEventListener('click', () => addModal.classList.remove('open'));
@@ -2121,56 +2171,58 @@
     document.getElementById('btnPasteVless').addEventListener('click', async () => {
       try { document.getElementById('txtVlessLink').value = (await navigator.clipboard.readText()).trim(); } catch {}
     });
-    document.getElementById('btnPasteSub').addEventListener('click', async () => {
-      try { document.getElementById('txtSubUrl').value = (await navigator.clipboard.readText()).trim(); } catch {}
-    });
 
     document.getElementById('btnSaveVless').addEventListener('click', async () => {
-      const link = document.getElementById('txtVlessLink').value.trim();
-      if (!link) return;
-      if (/^https?:\/\//i.test(link)) {
+      const rawInput = document.getElementById('txtVlessLink').value.trim();
+      const subName = document.getElementById('txtSubName').value.trim();
+      if (!rawInput) return;
+
+      // 1. Subscription URL (https:// or http://)
+      if (/^https?:\/\//i.test(rawInput)) {
         addModal.classList.remove('open');
-        document.getElementById('txtVlessLink').value = '';
-        await syncSubscription(link, 'MultiCo VPN');
+        await syncSubscription(rawInput, subName);
         return;
       }
-      const parsed = parseVlessUrl(link);
-      if (!parsed) {
-        showToast('VLESS havola noto‘g‘ri formatda!');
+
+      // 2. Single VLESS, multi-line VLESS list, or Base64 payload
+      const parsedList = parseBulkServers(rawInput);
+      if (!parsedList.length) {
+        showToast('Noto‘g‘ri format! https:// obuna yoki vless:// havola kiriting.');
         return;
       }
+
+      if (!state.bridgeOnline) {
+        await probeBridge(true);
+      }
+
       if (state.bridgeOnline) {
         try {
           const res = await bridgeFetch('/api/servers/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ link })
-          }, 5000);
-          if (res.success && res.server) {
+            body: JSON.stringify({ link: rawInput, name: subName })
+          }, 15000);
+          if (res.success) {
             await syncServersFromBridge();
-            state.settings.selectedServerId = res.server.id;
+            if (res.server && res.server.id) state.settings.selectedServerId = res.server.id;
+            document.getElementById('txtVlessLink').value = '';
+            addModal.classList.remove('open');
+            renderAll();
+            showToast(res.addedCount ? `${res.addedCount} ta server qo‘shildi!` : 'Server saqlandi!');
+            return;
           }
+          showToast(res.error || 'Serverni saqlab bo‘lmadi');
+          return;
         } catch {}
-      } else {
-        state.servers.unshift(parsed);
-        state.settings.selectedServerId = parsed.id;
-        saveLocalState();
       }
+
+      state.servers = [...parsedList, ...state.servers];
+      state.settings.selectedServerId = parsedList[0].id;
+      saveLocalState();
       document.getElementById('txtVlessLink').value = '';
       addModal.classList.remove('open');
       renderAll();
-      showToast('Server saqlandi!');
-    });
-
-    document.getElementById('btnSaveSub').addEventListener('click', async () => {
-      const u = document.getElementById('txtSubUrl').value.trim();
-      const n = document.getElementById('txtSubName').value.trim() || 'MultiCo VPN';
-      if (!/^https?:\/\//i.test(u)) {
-        showToast('Iltimos, to‘g‘ri obuna URL (https://...) kiriting.');
-        return;
-      }
-      addModal.classList.remove('open');
-      await syncSubscription(u, n);
+      showToast(parsedList.length > 1 ? `${parsedList.length} ta server saqlandi!` : 'Server saqlandi!');
     });
 
     // ================= PWA INSTALL & SERVICE WORKER =================
